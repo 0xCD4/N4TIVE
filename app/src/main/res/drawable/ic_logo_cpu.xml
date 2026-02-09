@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    
+    <!-- Dark Background Shape (Adaptive style) -->
+    <path
+        android:fillColor="#090C10"
+        android:pathData="M0,0h24v24h-24z"/>
+        
+    <!-- CPU Body -->
+    <path
+        android:fillColor="#1F2428"
+        android:strokeColor="#58A6FF"
+        android:strokeWidth="1.5"
+        android:pathData="M5,5 H19 V19 H5 Z"/>
+    
+    <!-- Pins (Top) -->
+    <path android:strokeColor="#30363D" android:strokeWidth="1" android:pathData="M7,2 V5 M9,2 V5 M11,2 V5 M13,2 V5 M15,2 V5 M17,2 V5"/>
+    <!-- Pins (Bottom) -->
+    <path android:strokeColor="#30363D" android:strokeWidth="1" android:pathData="M7,19 V22 M9,19 V22 M11,19 V22 M13,19 V22 M15,19 V22 M17,19 V22"/>
+    <!-- Pins (Left) -->
+    <path android:strokeColor="#30363D" android:strokeWidth="1" android:pathData="M2,7 H5 M2,9 H5 M2,11 H5 M2,13 H5 M2,15 H5 M2,17 H5"/>
+    <!-- Pins (Right) -->
+    <path android:strokeColor="#30363D" android:strokeWidth="1" android:pathData="M19,7 H22 M19,9 H22 M19,11 H22 M19,13 H22 M19,15 H22 M19,17 H22"/>
+
+    <!-- Inner Core -->
+    <path
+        android:fillColor="#58A6FF"
+        android:fillAlpha="0.1"
+        android:strokeColor="#58A6FF"
+        android:strokeWidth="1"
+        android:pathData="M9,9 H15 V15 H9 Z"/>
+        
+    <!-- Circuit Lines -->
+    <path android:strokeColor="#58A6FF" android:strokeWidth="0.8" android:pathData="M12,9 V7 M12,17 V15 M9,12 H7 M17,12 H15"/>
+</vector>

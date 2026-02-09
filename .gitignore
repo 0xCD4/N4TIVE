@@ -1,0 +1,34 @@
+# IDE
+*.iml
+/.idea
+.DS_Store
+
+# Gradle
+.gradle
+/build
+/app/build
+local.properties
+
+# Native
+.externalNativeBuild
+.cxx
+
+# Build artifacts
+*.apk
+*.ap_
+*.dex
+*.class
+gen/
+out/
+/captures
+
+# Logs
+*.log
+
+# Keep gradle wrapper (required for builds)
+!gradle/wrapper/gradle-wrapper.jar
+!gradlew
+!gradlew.bat
+
+# Secret files (NEVER commit)
+FLAGS_SECRET.txt
