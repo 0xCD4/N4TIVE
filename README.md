@@ -164,6 +164,14 @@ scripts/
 
 The app sets its headings in Newsreader and its text in Schibsted Grotesk. Both are bundled as Latin subsets and are licensed under the SIL Open Font License 1.1. The licence texts are in `licenses/`.
 
+## License
+
+N4TIVE, Copyright (c) 2026 Ahmet Göker, is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0). The full text is in `LICENSE`.
+
+You may use, change and share the project for non-commercial purposes, provided you give credit. Credit means naming Ahmet Göker as the author and linking to this repository. Commercial use, such as paid training, needs written permission from the author.
+
+Two parts come from others and keep their own terms. The bundled typefaces are under the SIL Open Font License 1.1, see `licenses/`. The Gradle wrapper files are under the Apache License 2.0.
+
 ## Author
 
 Ahmet Goker
