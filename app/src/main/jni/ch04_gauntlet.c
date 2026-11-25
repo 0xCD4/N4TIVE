@@ -136,12 +136,14 @@ static uint8_t __attribute__((noinline)) check_breakpoints(void) {
      * Scan our own .text for BRK (0xD4200000) or software breakpoint
      * patterns. A debugger inserts these.
      */
-    uint32_t *code_start = (uint32_t *)check_tracer_pid;
+    const uint8_t *code_start = (const uint8_t *)check_tracer_pid;
     int suspicious = 0;
     int i;
 
     for (i = 0; i < 256; i++) {
-        uint32_t instr = code_start[i];
+        uint32_t instr;
+        /* memcpy: function addresses are not 4-byte aligned on every ABI */
+        memcpy(&instr, code_start + (size_t)i * 4, sizeof(instr));
         /* BRK #0 = 0xD4200000, BRK #imm = 0xD42000xx */
         if ((instr & 0xFFE0001F) == 0xD4200000) {
             suspicious++;

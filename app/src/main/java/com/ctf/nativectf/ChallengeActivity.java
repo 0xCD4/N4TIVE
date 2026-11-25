@@ -1,266 +1,264 @@
 package com.ctf.nativectf;
 
 import android.app.Activity;
-import android.graphics.Color;
+import android.content.Context;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.text.InputType;
+import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
-import android.widget.Button;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import com.ctf.nativectf.challenges.*;
+import com.ctf.nativectf.challenges.Ch01;
+import com.ctf.nativectf.challenges.Ch02;
+import com.ctf.nativectf.challenges.Ch03;
+import com.ctf.nativectf.challenges.Ch04;
+import com.ctf.nativectf.challenges.Ch05;
+import com.ctf.nativectf.challenges.Ch06;
+import com.ctf.nativectf.challenges.Ch07;
+import com.ctf.nativectf.challenges.Ch08;
 
-/**
- * Individual challenge screen with flag submission.
- */
+/** One challenge: what it is about, how to reach it, and where to hand in the flag. */
 public class ChallengeActivity extends Activity {
 
-    private int challengeIndex;
-    private String challengeId;
-    private String challengeName;
-    private TextView statusText;
+    static final String EXTRA_INDEX = "challenge_index";
+
+    private static final String[] CHECK_NAMES = {
+        "TracerPid", "Frida in memory maps", "ptrace self-attach", "Timing",
+        "Breakpoint scan", "Java debugger", "APK signature"
+    };
+
+    private Ui ui;
+    private int index;
+    private Challenges.Item item;
     private EditText flagInput;
+    private TextView status;
+    private LinearLayout result;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ui = new Ui(this);
+        ui.systemBars();
 
-        challengeIndex = getIntent().getIntExtra("challenge_index", 0);
-        challengeId = getIntent().getStringExtra("challenge_id");
-        challengeName = getIntent().getStringExtra("challenge_name");
+        index = getIntent().getIntExtra(EXTRA_INDEX, 0);
+        if (index < 0 || index >= Challenges.ALL.length) index = 0;
+        item = Challenges.ALL[index];
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.parseColor("#0D1117"));
+        LinearLayout page = ui.column();
+        page.setPadding(ui.dp(24), ui.dp(20), ui.dp(24), ui.dp(44));
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(48, 48, 48, 48);
-
-        // Back button
-        TextView back = new TextView(this);
-        back.setText("< Back");
-        back.setTextColor(Color.parseColor("#58A6FF"));
-        back.setTextSize(16);
-        back.setPadding(0, 0, 0, 24);
+        TextView back = ui.label("‹  All challenges", ui.sans(500), 15, ui.accent);
+        back.setPadding(0, ui.dp(12), ui.dp(16), ui.dp(12));
         back.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) { finish(); }
+            public void onClick(View view) { finish(); }
         });
-        root.addView(back);
+        page.addView(back, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Title
-        TextView title = new TextView(this);
-        title.setText(challengeId + " - " + challengeName);
-        title.setTextColor(Color.parseColor("#C9D1D9"));
-        title.setTextSize(24);
-        title.setPadding(0, 0, 0, 8);
-        root.addView(title);
+        TextView meta = ui.label("Challenge " + item.number() + ", level " + item.level
+                + " of " + Challenges.MAX_LEVEL, ui.sans(500), 13, ui.mute);
+        page.addView(meta, ui.below(18));
 
-        // Library info
-        TextView libInfo = new TextView(this);
-        libInfo.setText("Library: lib" + challengeId + "_" + getLibSuffix() + ".so");
-        libInfo.setTextColor(Color.parseColor("#8B949E"));
-        libInfo.setTextSize(14);
-        libInfo.setPadding(0, 0, 0, 32);
-        root.addView(libInfo);
+        TextView title = ui.label(item.title, ui.serif(520, 48), 34, ui.ink);
+        title.setLetterSpacing(-0.014f);
+        title.setLineSpacing(0, 0.92f);
+        page.addView(title, ui.below(10));
 
-        // Description
-        TextView desc = new TextView(this);
-        desc.setText(getDescription());
-        desc.setTextColor(Color.parseColor("#C9D1D9"));
-        desc.setTextSize(14);
-        desc.setLineSpacing(4, 1.2f);
-        desc.setPadding(0, 0, 0, 32);
-        root.addView(desc);
+        page.addView(ui.label(item.library, ui.sans(400), 14, ui.mute), ui.below(10));
+        page.addView(ui.rule(ui.ink), ruleBelow(24));
 
-        // Status
-        statusText = new TextView(this);
-        statusText.setText("Status: UNSOLVED");
-        statusText.setTextColor(Color.parseColor("#F85149"));
-        statusText.setTextSize(16);
-        statusText.setPadding(0, 0, 0, 24);
-        root.addView(statusText);
+        TextView summary = ui.label(item.summary, ui.sans(400), 16.5f, ui.ink);
+        summary.setLineSpacing(0, 1.2f);
+        page.addView(summary, ui.below(24));
 
-        // Flag input
-        flagInput = new EditText(this);
-        flagInput.setHint("FLAG{...}");
-        flagInput.setTextColor(Color.parseColor("#C9D1D9"));
-        flagInput.setHintTextColor(Color.parseColor("#484F58"));
-        flagInput.setBackgroundColor(Color.parseColor("#21262D"));
-        flagInput.setPadding(24, 24, 24, 24);
-        flagInput.setTextSize(16);
-        root.addView(flagInput);
+        section(page, "Interface", item.contact);
+        section(page, "Approach", item.approach);
 
-        // Submit button
-        Button submit = new Button(this);
-        submit.setText("SUBMIT FLAG");
-        submit.setTextColor(Color.parseColor("#0D1117"));
-        submit.setBackgroundColor(Color.parseColor("#238636"));
+        page.addView(ui.rule(ui.line), ruleBelow(30));
+        page.addView(heading("Flag"), ui.below(26));
 
-        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        btnParams.setMargins(0, 24, 0, 0);
-        submit.setLayoutParams(btnParams);
+        flagInput = flagField();
+        page.addView(flagInput, ui.below(10));
 
+        TextView submit = ui.primaryButton("Submit flag");
         submit.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                submitFlag();
+            public void onClick(View view) { submitFlag(); }
+        });
+        page.addView(submit, ui.below(12));
+
+        status = ui.label("", ui.sans(500), 15, ui.mute);
+        page.addView(status, ui.below(16));
+        showSolved(Progress.isSolved(this, item.id));
+
+        addAction(page);
+
+        result = ui.column();
+        result.setBackground(ui.box(ui.sunken, ui.line));
+        result.setPadding(ui.dp(16), ui.dp(14), ui.dp(16), ui.dp(14));
+        result.setVisibility(View.GONE);
+        page.addView(result, ui.below(12));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(ui.paper);
+        scroll.setFillViewport(true);
+        scroll.addView(page);
+        setContentView(scroll);
+    }
+
+    private TextView heading(String text) {
+        return ui.label(text, ui.sans(600), 13, ui.mute);
+    }
+
+    private void section(LinearLayout page, String name, String body) {
+        page.addView(heading(name), ui.below(24));
+        TextView text = ui.label(body, ui.sans(400), 15.5f, ui.ink);
+        text.setLineSpacing(0, 1.2f);
+        page.addView(text, ui.below(7));
+    }
+
+    private EditText flagField() {
+        EditText field = new EditText(this);
+        field.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        field.setSingleLine(true);
+        field.setTypeface(Typeface.MONOSPACE);
+        field.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        field.setTextColor(ui.ink);
+        field.setHint("FLAG{...}");
+        field.setHintTextColor((ui.mute & 0x00FFFFFF) | 0x99000000);
+        field.setBackground(ui.box(ui.sunken, ui.line));
+        field.setPadding(ui.dp(14), ui.dp(15), ui.dp(14), ui.dp(15));
+        field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        field.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView view, int action, KeyEvent event) {
+                if (action == EditorInfo.IME_ACTION_DONE) {
+                    submitFlag();
+                    return true;
+                }
+                return false;
             }
         });
-        root.addView(submit);
+        return field;
+    }
 
-        // Interactive buttons for challenges that have them
-        addChallengeButtons(root);
-
-        scroll.addView(root);
-        setContentView(scroll);
+    private void showSolved(boolean solved) {
+        status.setText(solved ? "Solved" : "Unsolved");
+        status.setTextColor(solved ? ui.ink : ui.mute);
+        status.setTypeface(ui.sans(solved ? 600 : 500));
     }
 
     private void submitFlag() {
         String input = flagInput.getText().toString().trim();
         if (input.isEmpty()) {
-            Toast.makeText(this, "Enter a flag", Toast.LENGTH_SHORT).show();
+            status.setText("Enter a flag first.");
+            status.setTextColor(ui.mute);
+            status.setTypeface(ui.sans(500));
             return;
         }
 
-        boolean correct = false;
+        boolean correct;
         try {
-            switch (challengeIndex) {
-                case 0: correct = new Ch01().verifyFlag(input); break;
-                case 1: correct = new Ch02().verifyFlag(input); break;
-                case 2: correct = new Ch03().verifyFlag(input); break;
-                case 3: correct = new Ch04().verifyFlag(input); break;
-                case 4: correct = new Ch05().verifyFlag(input); break;
-                case 5: correct = new Ch06().verifyFlag(input); break;
-            }
-        } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            correct = verify(input);
+        } catch (Throwable error) {
+            status.setText("The library could not be called. " + error.getClass().getSimpleName());
+            status.setTextColor(ui.accent);
             return;
         }
 
         if (correct) {
-            statusText.setText("Status: SOLVED");
-            statusText.setTextColor(Color.parseColor("#3FB950"));
-            Toast.makeText(this, "Correct! Challenge solved.", Toast.LENGTH_LONG).show();
+            Progress.markSolved(this, item.id);
+            showSolved(true);
+            InputMethodManager keyboard = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (keyboard != null) keyboard.hideSoftInputFromWindow(flagInput.getWindowToken(), 0);
         } else {
-            statusText.setText("Status: WRONG FLAG");
-            statusText.setTextColor(Color.parseColor("#F85149"));
-            Toast.makeText(this, "Wrong flag. Keep digging.", Toast.LENGTH_SHORT).show();
+            status.setText("That is not the flag.");
+            status.setTextColor(ui.accent);
+            status.setTypeface(ui.sans(500));
         }
     }
 
-    private void addChallengeButtons(LinearLayout root) {
-        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        btnParams.setMargins(0, 16, 0, 0);
+    private boolean verify(String input) {
+        switch (index) {
+            case 0: return new Ch01().verifyFlag(input);
+            case 1: return new Ch02().verifyFlag(input);
+            case 2: return new Ch03().verifyFlag(input);
+            case 3: return new Ch04().verifyFlag(input);
+            case 4: return new Ch05().verifyFlag(input);
+            case 5: return new Ch06().verifyFlag(input);
+            case 6: return new Ch07().verifyFlag(input);
+            case 7: return new Ch08().verifyFlag(input);
+            default: return false;
+        }
+    }
 
-        switch (challengeIndex) {
-            case 0: {
-                Button tryBtn = new Button(this);
-                tryBtn.setText("Run solve()");
-                tryBtn.setLayoutParams(btnParams);
-                tryBtn.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        try {
-                            String result = new Ch01().solve();
-                            Toast.makeText(ChallengeActivity.this,
-                                "Result: " + result, Toast.LENGTH_LONG).show();
-                        } catch (Exception e) {
-                            Toast.makeText(ChallengeActivity.this,
-                                "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        }
-                    }
-                });
-                root.addView(tryBtn);
-                break;
+    /** Two challenges offer something to run from the screen itself. */
+    private void addAction(LinearLayout page) {
+        String text;
+        if (index == 0) text = "Run solve()";
+        else if (index == 3) text = "Run the seven checks";
+        else return;
+
+        page.addView(ui.rule(ui.line), ruleBelow(30));
+        page.addView(heading("Try it"), ui.below(26));
+        TextView action = ui.secondaryButton(text);
+        action.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                try {
+                    if (index == 0) showHint(new Ch01().solve());
+                    else showChecks(new Ch04().checkStatus(ChallengeActivity.this));
+                } catch (Throwable error) {
+                    showHint("The library could not be called. " + error.getClass().getSimpleName());
+                }
             }
-            case 3: {
-                Button checkBtn = new Button(this);
-                checkBtn.setText("Run Anti-Debug Check");
-                checkBtn.setLayoutParams(btnParams);
-                checkBtn.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        try {
-                            int status = new Ch04().checkStatus(ChallengeActivity.this);
-                            StringBuilder sb = new StringBuilder("Checks: ");
-                            String[] names = {"TracerPid", "Frida", "Ptrace",
-                                              "Timing", "Breakpoints", "JavaDbg", "Signature"};
-                            for (int i = 0; i < 7; i++) {
-                                sb.append(names[i]).append("=");
-                                sb.append(((status >> i) & 1) == 1 ? "PASS" : "FAIL");
-                                if (i < 6) sb.append(", ");
-                            }
-                            Toast.makeText(ChallengeActivity.this,
-                                sb.toString(), Toast.LENGTH_LONG).show();
-                        } catch (Exception e) {
-                            Toast.makeText(ChallengeActivity.this,
-                                "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        }
-                    }
-                });
-                root.addView(checkBtn);
-                break;
-            }
-        }
+        });
+        page.addView(action, ui.below(10));
     }
 
-    private String getLibSuffix() {
-        String[] suffixes = {"stringmaze", "stacksmasher", "typeconfusion",
-                             "gauntlet", "heapcraft", "vm"};
-        return (challengeIndex >= 0 && challengeIndex < suffixes.length)
-            ? suffixes[challengeIndex] : "unknown";
+    private void showHint(String text) {
+        result.removeAllViews();
+        TextView line = ui.label(text, Typeface.MONOSPACE, 14, ui.ink);
+        line.setLineSpacing(0, 1.15f);
+        result.addView(line);
+        result.setVisibility(View.VISIBLE);
     }
 
-    private String getDescription() {
-        switch (challengeIndex) {
-            case 0: return "The flag is encrypted with three layers of obfuscation "
-                + "inside the native library. Reverse the decryption chain to recover it.\n\n"
-                + "Interface: solve() returns a partial hint.\n"
-                + "Tools: Ghidra, IDA -- trace the XOR/permutation chain in .rodata.";
-
-            case 1: return "The processInput() function has a 64-byte stack buffer "
-                + "with no bounds checking. Overflow it to hijack a function pointer "
-                + "that sits right after the buffer on the stack.\n\n"
-                + "Interface: processInput(byte[]) -- send more than 64 bytes.\n"
-                + "Target: Redirect execution to the hidden compute_secret() function.";
-
-            case 2: return "Four gates protect the flag. Each gate has a JNI type "
-                + "confusion vulnerability -- pass the wrong Java type to trigger "
-                + "an alternate code path that leaks a key fragment.\n\n"
-                + "Interface: gate1-4() with crafted objects, then combine().\n"
-                + "Tools: Frida to call native functions with wrong parameter types.";
-
-            case 3: return "Seven anti-analysis checks must all pass (or be bypassed) "
-                + "to reveal the flag. Each check contributes a key byte.\n\n"
-                + "Checks: TracerPid, Frida maps, ptrace, timing, breakpoint scan, "
-                + "Java debugger, APK signature.\n"
-                + "Tools: Frida hooks to force-return expected values, or binary patch.";
-
-            case 4: return "Custom slab allocator with 8 slots. An off-by-16 overflow "
-                + "in edit() lets you corrupt adjacent slot metadata. Combined with "
-                + "a UAF from improperly cleared freed slots, you can hijack a "
-                + "function pointer to reach the hidden flag_generator().\n\n"
-                + "Interface: allocate/release/edit/read via JNI.";
-
-            case 5: return "A custom stack-based VM with 32 instructions executes a "
-                + "bytecode program (XOR-encoded in the binary). The program takes "
-                + "16 bytes of input, transforms them, and checks against expected "
-                + "constants.\n\n"
-                + "Steps: Reverse the instruction set, decode the bytecode, "
-                + "disassemble the program, solve the constraint system (Z3 recommended).";
-
-            default: return "";
+    /** One row per check, in the order the library runs them. */
+    private void showChecks(int bits) {
+        result.removeAllViews();
+        for (int i = 0; i < CHECK_NAMES.length; i++) {
+            boolean passed = ((bits >> i) & 1) == 1;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, ui.dp(6), 0, ui.dp(6));
+            row.addView(ui.label(CHECK_NAMES[i], ui.sans(400), 15, ui.ink),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView verdict = ui.label(passed ? "pass" : "fail",
+                    ui.sans(passed ? 500 : 600), 15, passed ? ui.mute : ui.accent);
+            verdict.setGravity(Gravity.END);
+            row.addView(verdict);
+            result.addView(row);
         }
+        result.setVisibility(View.VISIBLE);
+    }
+
+    private LinearLayout.LayoutParams ruleBelow(int topDp) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, ui.dp(1)));
+        params.topMargin = ui.dp(topDp);
+        return params;
     }
 }

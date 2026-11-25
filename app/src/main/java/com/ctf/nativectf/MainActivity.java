@@ -2,227 +2,121 @@ package com.ctf.nativectf;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+/** The contents page: every challenge with its number, technique and level. */
 public class MainActivity extends Activity {
 
-    // Challenge Data: ID, Name, Diff, Hint, Hex Address (cosmetic)
-    private static final String[][] CHALLENGES = {
-        {"ch01", "STRING MAZE",       "Lv.1", "Strings hide behind layers.", "0x00401000"},
-        {"ch02", "STACK SMASHER",     "Lv.2", "Buffer overflow mechanics.",  "0x004020A0"},
-        {"ch03", "TYPE CONFUSION",    "Lv.3", "JNI pointer mismatch.",       "0x004031B8"},
-        {"ch04", "ANTI-DEBUG",        "Lv.3", "Seven locks guard the door.", "0x004045C0"},
-        {"ch05", "HEAP FENG SHUI",    "Lv.4", "UAF & Heap manipulation.",    "0x00405D40"},
-        {"ch06", "VIRTUAL MACHINE",   "Lv.5", "Custom bytecode arch.",       "0x00406F00"},
-    };
-
-    // Hardware Theme Colors
-    private static final int BG_COLOR = Color.parseColor("#090C10"); // Deep dark
-    private static final int TEXT_PRIMARY = Color.parseColor("#C9D1D9");
-    private static final int TEXT_DIM = Color.parseColor("#484F58");
-    private static final int ACCENT_CYAN = Color.parseColor("#58A6FF"); // Blue/Cyan
-    private static final int ACCENT_GREEN = Color.parseColor("#3FB950"); // Matrix/Success Green
-    private static final int BORDER_COLOR = Color.parseColor("#30363D");
+    private Ui ui;
+    private final TextView[] solvedMarks = new TextView[Challenges.ALL.length];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ui = new Ui(this);
+        ui.systemBars();
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG_COLOR);
-        
-        // Header Section (Terminal Boot Style)
-        root.addView(createTerminalHeader());
+        LinearLayout page = ui.column();
+        page.setPadding(ui.dp(24), ui.dp(40), ui.dp(24), ui.dp(44));
 
-        // Scroll Area
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        scroll.setLayoutParams(scrollParams);
-        
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(32, 24, 32, 24);
+        TextView name = ui.label("N4TIVE", ui.serif(560, 60), 42, ui.ink);
+        name.setLetterSpacing(-0.014f);
+        page.addView(name);
 
-        for (int i = 0; i < CHALLENGES.length; i++) {
-            list.addView(createHardwareCard(i));
+        TextView lead = ui.label(
+                "Eight reverse engineering challenges inside the native libraries of an Android app.",
+                ui.sans(400), 16.5f, ui.mute);
+        lead.setLineSpacing(0, 1.18f);
+        page.addView(lead, ui.below(14));
+
+        page.addView(ui.rule(ui.ink), ruleBelow(30));
+
+        for (int i = 0; i < Challenges.ALL.length; i++) {
+            page.addView(row(i));
+            page.addView(ui.rule(ui.line));
         }
-        
-        // Add a fake "memory dump" footer inside scroll
-        TextView memDump = new TextView(this);
-        memDump.setText("\n>> END OF MEMORY SEGMENT\n>> WAITING FOR INPUT_");
-        memDump.setTypeface(Typeface.MONOSPACE);
-        memDump.setTextColor(Color.parseColor("#21262D"));
-        memDump.setTextSize(10);
-        memDump.setGravity(Gravity.CENTER);
-        memDump.setPadding(0, 32, 0, 64);
-        list.addView(memDump);
 
-        scroll.addView(list);
-        root.addView(scroll);
+        TextView signature = ui.label("Ahmet Göker, CSINT Research", ui.serif(480, 20), 17, ui.ink);
+        page.addView(signature, ui.below(36));
+        TextView source = ui.label("github.com/0xCD4/N4TIVE", ui.sans(400), 14, ui.mute);
+        page.addView(source, ui.below(6));
 
-        // Fixed Footer Signature
-        root.addView(createSignatureFooter());
-
-        setContentView(root);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(ui.paper);
+        scroll.setFillViewport(true);
+        scroll.addView(page);
+        setContentView(scroll);
     }
 
-    private View createTerminalHeader() {
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(48, 64, 48, 32);
-        header.setGravity(Gravity.CENTER);
-
-        // Logo removed
-        /*
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.drawable.ic_logo_cpu);
-        logo.setColorFilter(ACCENT_CYAN); // Tint the logo cyan
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(160, 160);
-        lp.bottomMargin = 24;
-        logo.setLayoutParams(lp);
-        header.addView(logo);
-        */
-
-        // System Text
-
-        TextView sysText = new TextView(this);
-        sysText.setText("// SYSTEM: ONLINE\n// ARCH: ARM64-v8a");
-        sysText.setTextColor(ACCENT_GREEN);
-        sysText.setTypeface(Typeface.MONOSPACE);
-        sysText.setTextSize(12);
-        sysText.setGravity(Gravity.CENTER);
-        header.addView(sysText);
-
-        // Title
-        TextView title = new TextView(this);
-        title.setText("N4TIVE");
-        title.setTextColor(TEXT_PRIMARY);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextSize(20);
-        title.setPadding(0, 16, 0, 0);
-        header.addView(title);
-
-        return header;
+    @Override
+    protected void onResume() {
+        super.onResume();
+        for (int i = 0; i < Challenges.ALL.length; i++) {
+            boolean solved = Progress.isSolved(this, Challenges.ALL[i].id);
+            solvedMarks[i].setVisibility(solved ? View.VISIBLE : View.GONE);
+        }
     }
 
-    private View createHardwareCard(final int index) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        
-        // Custom "Tech" background provided programmatically
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#0D1117")); // Module BG
-        bg.setStroke(2, BORDER_COLOR);
-        bg.setCornerRadius(8); // Slight round, almost sharp
-        card.setBackground(bg);
-        
-        card.setPadding(32, 24, 32, 24);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = 24;
-        card.setLayoutParams(params);
+    private View row(final int index) {
+        Challenges.Item item = Challenges.ALL[index];
 
-        // Top Row: Address | Difficulty
-        LinearLayout metaRow = new LinearLayout(this);
-        metaRow.setOrientation(LinearLayout.HORIZONTAL);
-        
-        TextView address = new TextView(this);
-        address.setText(CHALLENGES[index][4]); // Hex address
-        address.setTextColor(Color.parseColor("#8B949E"));
-        address.setTypeface(Typeface.MONOSPACE);
-        address.setTextSize(11);
-        metaRow.addView(address);
-        
-        View spacer = new View(this);
-        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 0, 1f));
-        metaRow.addView(spacer);
-        
-        TextView diff = new TextView(this);
-        diff.setText("[" + CHALLENGES[index][2] + "]");
-        diff.setTextColor(getDiffColor(index));
-        diff.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        diff.setTextSize(12);
-        metaRow.addView(diff);
-        
-        card.addView(metaRow);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, ui.dp(18), 0, ui.dp(18));
+        row.setBackground(ui.pressable(null));
+        row.setClickable(true);
+        row.setFocusable(true);
 
-        // Main Title
-        TextView name = new TextView(this);
-        name.setText(CHALLENGES[index][1]);
-        name.setTextColor(TEXT_PRIMARY);
-        name.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        name.setTextSize(16);
-        name.setPadding(0, 8, 0, 4);
-        card.addView(name);
+        TextView number = ui.label(item.number(), ui.sans(500), 13, ui.mute);
+        number.setFontFeatureSettings("tnum");
+        number.setPadding(0, ui.dp(8), 0, 0);
+        row.addView(number, new LinearLayout.LayoutParams(ui.dp(38), ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Hint (Comment style)
-        TextView hint = new TextView(this);
-        hint.setText("// " + CHALLENGES[index][3]);
-        hint.setTextColor(Color.parseColor("#484F58")); // Comment gray
-        hint.setTypeface(Typeface.MONOSPACE, Typeface.ITALIC);
-        hint.setTextSize(12);
-        card.addView(hint);
+        LinearLayout middle = ui.column();
+        TextView title = ui.label(item.title, ui.serif(480, 28), 23, ui.ink);
+        title.setLetterSpacing(-0.01f);
+        middle.addView(title);
+        TextView technique = ui.label(item.technique, ui.sans(400), 14.5f, ui.mute);
+        technique.setLineSpacing(0, 1.1f);
+        middle.addView(technique, ui.below(6));
+        row.addView(middle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        // Interaction
-        card.setClickable(true);
-        card.setFocusable(true);
-        card.setOnClickListener(new View.OnClickListener() {
+        LinearLayout side = ui.column();
+        side.setGravity(Gravity.END);
+        side.setPadding(ui.dp(12), ui.dp(8), 0, 0);
+        TextView level = ui.label("Level " + item.level, ui.sans(500), 13, ui.mute);
+        level.setFontFeatureSettings("tnum");
+        level.setGravity(Gravity.END);
+        side.addView(level);
+        TextView solved = ui.label("Solved", ui.sans(600), 13, ui.accent);
+        solved.setGravity(Gravity.END);
+        solved.setVisibility(View.GONE);
+        side.addView(solved, ui.below(6));
+        solvedMarks[index] = solved;
+        row.addView(side, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        row.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
+            public void onClick(View view) {
                 Intent intent = new Intent(MainActivity.this, ChallengeActivity.class);
-                intent.putExtra("challenge_index", index);
-                intent.putExtra("challenge_id", CHALLENGES[index][0]);
-                intent.putExtra("challenge_name", CHALLENGES[index][1]);
+                intent.putExtra(ChallengeActivity.EXTRA_INDEX, index);
                 startActivity(intent);
             }
         });
-
-        return card;
+        return row;
     }
 
-    private View createSignatureFooter() {
-        LinearLayout footer = new LinearLayout(this);
-        footer.setOrientation(LinearLayout.VERTICAL);
-        footer.setBackgroundColor(Color.parseColor("#050709")); // Slightly darker
-        footer.setPadding(0, 32, 0, 48);
-        footer.setGravity(Gravity.CENTER); // Ensure centering
-
-        // Separator Line
-        View line = new View(this);
-        line.setBackgroundColor(Color.parseColor("#30363D")); // Lighter grey line
-        LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(120, 4); // Thicker line
-        lineParams.bottomMargin = 24;
-        line.setLayoutParams(lineParams);
-        footer.addView(line);
-
-        TextView sig = new TextView(this);
-        sig.setText("Built by Ahmet Göker");
-        sig.setTextColor(Color.WHITE); // Pure White
-        sig.setTypeface(Typeface.MONOSPACE, Typeface.BOLD); // BOLD
-        sig.setTextSize(13); // Slightly larger
-        sig.setGravity(Gravity.CENTER);
-        sig.setLetterSpacing(0.05f);
-        
-        footer.addView(sig);
-
-        return footer;
-    }
-
-    private int getDiffColor(int index) {
-        if (index < 2) return ACCENT_GREEN;
-        if (index < 4) return ACCENT_CYAN;
-        return Color.parseColor("#FF7B72"); // Soft Red
+    private LinearLayout.LayoutParams ruleBelow(int topDp) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, ui.dp(1)));
+        params.topMargin = ui.dp(topDp);
+        return params;
     }
 }

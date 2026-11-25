@@ -32,3 +32,11 @@ target_link_libraries(ch05_heapcraft flag_core log)
 # -- Challenge 06: Custom VM --
 add_library(ch06_vm SHARED ch06_vm.c)
 target_link_libraries(ch06_vm flag_core log)
+
+# -- Challenge 07: Ghost Export --
+add_library(ch07_ghostexport SHARED ch07_ghostexport.c)
+target_link_libraries(ch07_ghostexport flag_core log)
+
+# -- Challenge 08: Signal Maze --
+add_library(ch08_signalmaze SHARED ch08_signalmaze.c)
+target_link_libraries(ch08_signalmaze flag_core log)

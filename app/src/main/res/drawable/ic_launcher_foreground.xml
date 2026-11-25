@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "N4" set in Newsreader, outlines taken from the bundled font. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#F7F5F0"
+        android:pathData="M33.68 62.98V41.38L30.27 40.23V39.73H39.1L52.53 58.66L51.61 61.16V41.03L48.44 40.28V39.73H55.8V40.28L52.88 41.03V64.5H50.69L34.41 41.59L34.85 41.11V62.98L38.03 63.72V64.27H30.76V63.72ZM72.19 39.5V62.91L75.89 63.74V64.27H63.37V63.74L67.1 62.91V42.57L68.46 41.97L58.22 54.99L58.69 53.7H74.03L77.73 53.19L76.68 57.36H56.39V55.89L68.88 39.5Z" />
+    <path
+        android:fillColor="#D39A86"
+        android:pathData="M30.27,69.10h47.46v1.3h-47.46z" />
+</vector>

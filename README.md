@@ -4,7 +4,7 @@ Android Native Reverse Engineering CTF
 
 ## Overview
 
-N4TIVE is a six-challenge Capture The Flag application focused on Android native library analysis. All challenges require reversing `.so` files compiled from C.
+N4TIVE is an eight-challenge Capture The Flag application focused on Android native library analysis. All challenges require reversing `.so` files compiled from C.
 
 ## Requirements
 
@@ -79,6 +79,20 @@ A custom slab allocator with 8 slots. An off-by-16 overflow allows corruption of
 
 A custom stack-based virtual machine with 32 opcodes. The bytecode is XOR-encoded. Reverse the instruction set, decode the bytecode, and solve the constraint system.
 
+### Challenge 07: Ghost Export
+**Difficulty:** 3/5  
+**Library:** libch07_ghostexport.so  
+**Technique:** Decoy export, RegisterNatives, ELF notes
+
+The library exports a function with the JNI name of `reveal()`. That export is a decoy and answers with a flag the verifier rejects. The function Java reaches is bound in `JNI_OnLoad` through `RegisterNatives`. A constructor in `.init_array` runs first, finds a custom ELF note in the library's own program headers and takes a key from it. Find the hidden function, read the key with `readelf -n`, and invert the passphrase check.
+
+### Challenge 08: Signal Maze
+**Difficulty:** 4/5  
+**Library:** libch08_signalmaze.so  
+**Technique:** Control flow hidden in signal handlers
+
+`walk()` takes a 16-character code and raises `SIGTRAP` once per character. The work happens in three signal handlers. Each one mixes the current byte into a 64-bit state, compares part of it with a checkpoint and installs the handler for the next step, so the order of the handlers depends on the code. Find the handlers through `sigaction`, rebuild the walk offline and recover the code one character at a time. A debugger that swallows the signal ends the walk.
+
 ## Flags
 
 Every flag has the form `FLAG{...}` with a lowercase hexadecimal body. Submit it in the app, or check it offline.
@@ -89,7 +103,7 @@ Every flag has the form `FLAG{...}` with a lowercase hexadecimal body. Submit it
 
 The script needs bash 4 or later and openssl. It holds the same salts and HMAC-SHA256 digests as `flag_core.c`, so it accepts exactly the flags the app accepts.
 
-Challenge 06 derives its flag from the correct 16-byte input, so that flag is not stored in the library.
+Challenge 06 derives its flag from the correct 16-byte input, so that flag is not stored in the library. Challenges 07 and 08 decrypt their flag with a key derived from the right passphrase or code.
 
 ## Maintaining the Flags
 
@@ -97,6 +111,7 @@ One script writes the encrypted tables in the challenge sources and the digests 
 
 ```
 python scripts/gen_flags.py new      # create FLAGS_SECRET.txt with random flags
+python scripts/gen_flags.py extend   # add entries for new challenges, keep the others
 python scripts/gen_flags.py apply    # rewrite the generated blocks
 python scripts/gen_flags.py check    # fail if the sources and the secrets differ
 ```
@@ -113,11 +128,17 @@ python scripts/gen_flags.py check    # fail if the sources and the secrets diffe
 
 ```
 app/src/main/
+├── assets/fonts/
+│   ├── newsreader.ttf
+│   └── schibsted_grotesk.ttf
 ├── java/com/ctf/nativectf/
 │   ├── MainActivity.java
 │   ├── ChallengeActivity.java
+│   ├── Challenges.java
+│   ├── Progress.java
+│   ├── Ui.java
 │   └── challenges/
-│       └── Ch01.java - Ch06.java
+│       └── Ch01.java - Ch08.java
 └── jni/
     ├── CMakeLists.txt
     ├── flag_core.c
@@ -126,12 +147,22 @@ app/src/main/
     ├── ch03_typeconfusion.c
     ├── ch04_gauntlet.c
     ├── ch05_heapcraft.c
-    └── ch06_vm.c
+    ├── ch06_vm.c
+    ├── ch07_ghostexport.c
+    └── ch08_signalmaze.c
+
+licenses/
+├── OFL-Newsreader.txt
+└── OFL-SchibstedGrotesk.txt
 
 scripts/
 ├── gen_flags.py
 └── verify_flag.sh
 ```
+
+## Typefaces
+
+The app sets its headings in Newsreader and its text in Schibsted Grotesk. Both are bundled as Latin subsets and are licensed under the SIL Open Font License 1.1. The licence texts are in `licenses/`.
 
 ## Author
 

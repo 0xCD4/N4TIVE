@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The palette of csintresearch.org, light theme. -->
+<resources>
+    <color name="paper">#F7F5F0</color>
+    <color name="sunken">#EFECE5</color>
+    <color name="ink">#18181B</color>
+    <color name="mute">#5D5A54</color>
+    <color name="line">#DCD7CC</color>
+    <color name="accent">#7B2231</color>
+    <color name="icon_background">#18181B</color>
+</resources>

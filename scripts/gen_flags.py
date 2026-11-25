@@ -6,6 +6,7 @@ flag_core.c and verify_flag.sh all depend on the flags. This script is the
 only thing that writes them, so a blob and its digest cannot drift apart.
 
     python scripts/gen_flags.py new      create FLAGS_SECRET.txt with random flags
+    python scripts/gen_flags.py extend   add entries for new challenges, keep the others
     python scripts/gen_flags.py apply    rewrite the generated blocks in the sources
     python scripts/gen_flags.py check    exit 1 if the sources differ from the secrets
 
@@ -27,11 +28,17 @@ JNI = ROOT / "app" / "src" / "main" / "jni"
 SECRET_FILE = ROOT / "FLAGS_SECRET.txt"
 VERIFY_SH = ROOT / "scripts" / "verify_flag.sh"
 
-CHALLENGES = ["ch01", "ch02", "ch03", "ch04", "ch05", "ch06"]
+CHALLENGES = ["ch01", "ch02", "ch03", "ch04", "ch05", "ch06", "ch07", "ch08"]
 # Length of the part between FLAG{ and }, fixed by each challenge's C code.
-INNER_LEN = {"ch01": 40, "ch02": 42, "ch03": 40, "ch04": 42, "ch05": 42, "ch06": 40}
+INNER_LEN = {"ch01": 40, "ch02": 42, "ch03": 40, "ch04": 42, "ch05": 42, "ch06": 40,
+             "ch07": 40, "ch08": 40}
+FREE_FLAGS = [ch for ch in CHALLENGES if ch != "ch06"]   # ch06 derives its flag from the VM input
 CH06_INPUT_LEN = 16
+CH07_PASS_LEN = 12
+CH08_CODE_LEN = 16
+CODE_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 MASK32 = 0xFFFFFFFF
+MASK64 = 0xFFFFFFFFFFFFFFFF
 
 
 # --------------------------------------------------------------------------
@@ -118,35 +125,50 @@ def ch06_flag(vm_input):
     return "FLAG{%s}" % hashlib.sha256(vm_input).digest()[:20].hex()
 
 
-def new_secrets():
-    lines = [
-        "# N4TIVE flags. Never commit this file.",
-        "# Written by scripts/gen_flags.py new. Run `apply` after any change.",
-    ]
-    for ch in CHALLENGES[:5]:
-        lines.append("%s=FLAG{%s}" % (ch, secrets.token_hex(INNER_LEN[ch] // 2)))
-    vm_input = secrets.token_bytes(CH06_INPUT_LEN)
-    lines.append("# ch06 has no free flag. It is derived from the 16-byte VM input.")
-    lines.append("ch06_input=%s" % vm_input.hex())
-    return "\n".join(lines) + "\n"
+def random_code(length):
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(length))
 
 
-def load_secrets():
-    if not SECRET_FILE.exists():
-        raise SystemExit("%s is missing. Run: python scripts/gen_flags.py new" % SECRET_FILE.name)
+def fresh_entries(seed):
+    """Every entry of the secret file, in file order, as (key, value, comment)."""
+    entries = [(ch, "FLAG{%s}" % secrets.token_hex(INNER_LEN[ch] // 2), None) for ch in CHALLENGES[:5]]
+    entries.append(("ch06_input", secrets.token_bytes(CH06_INPUT_LEN).hex(),
+                    "ch06 has no free flag. It is derived from the 16-byte VM input."))
+    entries.append(("ch07", "FLAG{%s}" % secrets.token_hex(INNER_LEN["ch07"] // 2), None))
+    entries.append(("ch07_pass", random_code(CH07_PASS_LEN),
+                    "ch07: reveal() returns the flag for this passphrase."))
+    entries.append(("ch08", "FLAG{%s}" % secrets.token_hex(INNER_LEN["ch08"] // 2), None))
+    while True:
+        code = random_code(CH08_CODE_LEN)
+        if maze_is_unique(seed, code.encode("ascii")):
+            break
+    entries.append(("ch08_code", code, "ch08: walk() returns the flag for this code."))
+    return entries
+
+
+def read_secret_file():
     values = {}
     for line in SECRET_FILE.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             key, _, value = line.partition("=")
             values[key.strip()] = value.strip()
+    return values
+
+
+def load_secrets():
+    if not SECRET_FILE.exists():
+        raise SystemExit("%s is missing. Run: python scripts/gen_flags.py new" % SECRET_FILE.name)
+    values = read_secret_file()
 
     flags = {}
-    for ch in CHALLENGES[:5]:
+    for ch in FREE_FLAGS:
         flag = values.get(ch, "")
         m = re.fullmatch(r"FLAG\{([0-9a-f]+)\}", flag)
         if not m or len(m.group(1)) != INNER_LEN[ch]:
-            raise SystemExit("%s must be FLAG{<%d lowercase hex characters>}" % (ch, INNER_LEN[ch]))
+            raise SystemExit("%s must be FLAG{<%d lowercase hex characters>}. "
+                             "For a new challenge run: python scripts/gen_flags.py extend"
+                             % (ch, INNER_LEN[ch]))
         flags[ch] = flag
     try:
         vm_input = bytes.fromhex(values.get("ch06_input", ""))
@@ -155,7 +177,14 @@ def load_secrets():
     if len(vm_input) != CH06_INPUT_LEN:
         raise SystemExit("ch06_input must be %d hex characters" % (CH06_INPUT_LEN * 2))
     flags["ch06"] = ch06_flag(vm_input)
-    return flags, vm_input
+
+    extra = {"ch06_input": vm_input}
+    for key, length in (("ch07_pass", CH07_PASS_LEN), ("ch08_code", CH08_CODE_LEN)):
+        value = values.get(key, "")
+        if not re.fullmatch(r"[a-z0-9]{%d}" % length, value):
+            raise SystemExit("%s must be %d characters of a-z and 0-9" % (key, length))
+        extra[key] = value.encode("ascii")
+    return flags, extra
 
 
 def inner(flag):
@@ -230,6 +259,95 @@ def build_ch05(src, flag):
         masked.append(b ^ key)
         key = (key * mul + add) & 0xFF
     return "static const uint8_t masked_flag[%d] = {\n" % len(masked) + fmt_bytes(masked) + "};\n"
+
+
+def build_ch07(src, flag, passphrase):
+    """hidden_reveal(): chained byte check, then an LCG keyed by the passphrase."""
+    m = re.search(r"^[ \t]*#define[ \t]+NOTE_KEY[ \t]+(.*)$", src, re.M)
+    key = [int(x, 16) for x in re.findall(r"0x[0-9a-fA-F]{2}", m.group(1))] if m else []
+    if len(key) != 16:
+        raise SystemExit("ch07 NOTE_KEY must hold 16 bytes")
+
+    target, prev = [], 0x5A
+    for i, ch in enumerate(passphrase):
+        v = ((ch + prev) & 0xFF) ^ key[i]
+        r = (i % 7) + 1
+        v = ((v << r) | (v >> (8 - r))) & 0xFF
+        target.append(v)
+        prev = v
+
+    state = 2166136261
+    for ch in passphrase:
+        state = ((state ^ ch) * 16777619) & MASK32
+    state ^= key[12] | (key[13] << 8) | (key[14] << 16) | (key[15] << 24)
+    blob = []
+    for b in flag.encode("ascii"):
+        state = (state * 1103515245 + 12345) & MASK32
+        blob.append(b ^ ((state >> 16) & 0xFF))
+
+    return ("static const uint8_t pass_target[PASS_LEN] = {\n" + fmt_bytes(target) + "};\n"
+            "static const uint8_t flag_blob[%d] = {\n" % len(blob) + fmt_bytes(blob) + "};\n")
+
+
+def rol64(value, count):
+    return ((value << count) | (value >> (64 - count))) & MASK64
+
+
+def maze_room(room, state, byte, step):
+    """The three signal handlers of ch08, one step each."""
+    if room == 0:
+        state ^= (byte + 0x9E3779B97F4A7C15 * (step + 1)) & MASK64
+        return (rol64(state, 13) * 0xBF58476D1CE4E5B9) & MASK64
+    if room == 1:
+        state = (state + (byte << ((step % 7) * 8))) & MASK64
+        state ^= state >> 29
+        return (state * 0x94D049BB133111EB) & MASK64
+    state ^= (byte * 0x0101010101010101) & MASK64
+    return (rol64(state, 31) + 0xD6E8FEB86659FD93 * step) & MASK64
+
+
+def maze_walk(seed, code):
+    """Return (checkpoints, final state) of the walk for the given code bytes."""
+    state, room, marks = seed, 0, []
+    for step, byte in enumerate(code):
+        state = maze_room(room, state, byte, step)
+        marks.append((state >> 24) & 0xFFFF)
+        room = (state >> 7) % 3
+    return marks, state
+
+
+def maze_is_unique(seed, code):
+    """True when, at every step, no other byte value reaches the same checkpoint."""
+    state, room = seed, 0
+    for step, byte in enumerate(code):
+        right = maze_room(room, state, byte, step)
+        mark = (right >> 24) & 0xFFFF
+        for other in range(256):
+            if other != byte and (maze_room(room, state, other, step) >> 24) & 0xFFFF == mark:
+                return False
+        state, room = right, (right >> 7) % 3
+    return True
+
+
+def maze_seed(src):
+    m = re.search(r"^[ \t]*#define[ \t]+MAZE_SEED[ \t]+(0[xX][0-9a-fA-F]+)", src, re.M)
+    if not m:
+        raise SystemExit("#define MAZE_SEED not found")
+    return int(m.group(1), 16)
+
+
+def build_ch08(src, flag, code):
+    """walk(): the checkpoints of the valid path, and the flag under an xorshift keystream."""
+    marks, x = maze_walk(maze_seed(src), code)
+    blob = []
+    for b in flag.encode("ascii"):
+        x ^= x >> 12
+        x ^= (x << 25) & MASK64
+        x ^= x >> 27
+        blob.append(b ^ (((x * 0x2545F4914F6CDD1D) & MASK64) >> 56))
+    rows = [", ".join("0x%04x" % v for v in marks[i:i + 8]) for i in range(0, len(marks), 8)]
+    return ("static const uint16_t checkpoints[CODE_LEN] = {\n    " + ",\n    ".join(rows) + "\n};\n"
+            "static const uint8_t flag_blob[%d] = {\n" % len(blob) + fmt_bytes(blob) + "};\n")
 
 
 # --------------------------------------------------------------------------
@@ -415,7 +533,7 @@ def build_ch06(src, vm_input):
 
 def digests(core_src, flags):
     salts = c_array(core_src, "challenge_salts")
-    if len(salts) != 6 * 32:
+    if len(salts) != len(CHALLENGES) * 32:
         raise SystemExit("challenge_salts has the wrong shape")
     table = []
     for i, ch in enumerate(CHALLENGES):
@@ -425,12 +543,12 @@ def digests(core_src, flags):
 
 
 def build_digests_c(table):
-    lines = ["static const uint8_t stored_digests[6][SHA256_DIGEST_SIZE] = {"]
+    lines = ["static const uint8_t stored_digests[NUM_CHALLENGES][SHA256_DIGEST_SIZE] = {"]
     for n, (ch, _salt, digest) in enumerate(table):
         rows = [",".join("0x%02x" % b for b in digest[i:i + 8]) for i in range(0, 32, 8)]
         lines.append("    /* %s */ {%s," % (ch, rows[0]))
         lines += ["                %s," % r for r in rows[1:3]]
-        lines.append("                %s}%s" % (rows[3], "," if n < 5 else ""))
+        lines.append("                %s}%s" % (rows[3], "," if n < len(table) - 1 else ""))
     lines.append("};")
     return "\n".join(lines) + "\n"
 
@@ -447,7 +565,8 @@ def build_tables_sh(table):
 
 def render():
     """Return {path: (new_text, eol, old_text)} for every generated file."""
-    flags, vm_input = load_secrets()
+    flags, extra = load_secrets()
+    vm_input = extra["ch06_input"]
     jobs = [
         ("ch01_stringmaze.c", "encrypted_flag", lambda s: build_ch01(s, flags["ch01"])),
         ("ch02_stacksmasher.c", "magic", lambda s: build_ch02(s, flags["ch02"])),
@@ -455,6 +574,8 @@ def render():
         ("ch04_gauntlet.c", "enc_flag", lambda s: build_ch04(s, flags["ch04"])),
         ("ch05_heapcraft.c", "masked_flag", lambda s: build_ch05(s, flags["ch05"])),
         ("ch06_vm.c", "encoded_bytecode", lambda s: build_ch06(s, vm_input)),
+        ("ch07_ghostexport.c", "ch07_tables", lambda s: build_ch07(s, flags["ch07"], extra["ch07_pass"])),
+        ("ch08_signalmaze.c", "ch08_tables", lambda s: build_ch08(s, flags["ch08"], extra["ch08_code"])),
     ]
     result = {}
     for filename, block, build in jobs:
@@ -472,12 +593,41 @@ def render():
     return result
 
 
+def format_entries(entries, header=True):
+    lines = []
+    if header:
+        lines += ["# N4TIVE flags. Never commit this file.",
+                  "# Written by scripts/gen_flags.py. Run the apply command after any change."]
+    for key, value, comment in entries:
+        if comment:
+            lines.append("# " + comment)
+        lines.append("%s=%s" % (key, value))
+    return "\n".join(lines) + "\n"
+
+
 def cmd_new(args):
     if SECRET_FILE.exists() and not args.force:
         raise SystemExit("%s already exists. Use --force to replace every flag." % SECRET_FILE.name)
+    seed = maze_seed(read_text(JNI / "ch08_signalmaze.c")[0])
     with open(SECRET_FILE, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(new_secrets())
+        handle.write(format_entries(fresh_entries(seed)))
     print("wrote %s. Now run: python scripts/gen_flags.py apply" % SECRET_FILE.name)
+
+
+def cmd_extend(_args):
+    """Add what newer challenges need and leave every existing entry untouched."""
+    if not SECRET_FILE.exists():
+        raise SystemExit("%s is missing. Run: python scripts/gen_flags.py new" % SECRET_FILE.name)
+    have = read_secret_file()
+    seed = maze_seed(read_text(JNI / "ch08_signalmaze.c")[0])
+    missing = [e for e in fresh_entries(seed) if e[0] not in have]
+    if not missing:
+        print("nothing to add, %s already has every entry" % SECRET_FILE.name)
+        return
+    current = SECRET_FILE.read_text(encoding="utf-8")
+    with open(SECRET_FILE, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(current.rstrip("\n") + "\n" + format_entries(missing, header=False))
+    print("added %s. Now run: python scripts/gen_flags.py apply" % ", ".join(e[0] for e in missing))
 
 
 def cmd_apply(_args):
@@ -502,6 +652,7 @@ def main():
     new = sub.add_parser("new", help="create FLAGS_SECRET.txt with random flags")
     new.add_argument("--force", action="store_true", help="replace an existing secret file")
     new.set_defaults(func=cmd_new)
+    sub.add_parser("extend", help="add entries for new challenges").set_defaults(func=cmd_extend)
     sub.add_parser("apply", help="rewrite the generated blocks").set_defaults(func=cmd_apply)
     sub.add_parser("check", help="verify the sources against the secrets").set_defaults(func=cmd_check)
     args = parser.parse_args()

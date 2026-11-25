@@ -18,6 +18,7 @@
 #define SHA256_BLOCK_SIZE  64
 #define SHA256_DIGEST_SIZE 32
 #define FLAG_MAX_LEN       128
+#define NUM_CHALLENGES     8
 
 typedef struct {
     uint32_t state[8];
@@ -35,7 +36,7 @@ void hmac_sha256(const uint8_t *key, size_t key_len,
 
 /*
  * Verify a flag submission.
- *   challenge_id  : 0-5
+ *   challenge_id  : 0 to NUM_CHALLENGES - 1
  *   user_input    : submitted flag string
  * Returns 1 if correct, 0 if wrong.
  */
