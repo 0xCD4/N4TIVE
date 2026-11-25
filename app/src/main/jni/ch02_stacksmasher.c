@@ -11,8 +11,9 @@
  *   1. Reverse the .so to find processInput() buffer size (64 bytes)
  *   2. Find compute_secret() address
  *   3. Overflow to redirect execution to compute_secret()
- *   4. The return value from compute_secret() is the flag seed
- *   5. Feed the seed into the derivation function to get FLAG{...}
+ *   4. compute_secret() rebuilds the flag seed and writes it to logcat
+ *      (tag "ch02")
+ *   5. The flag is the seed wrapped as FLAG{<seed>}
  *
  * Note: Compiled with -fno-stack-protector for this challenge.
  */
@@ -45,24 +46,25 @@ static int normal_handler(const char *data, size_t len) {
  * Hidden function. NOT called anywhere in normal flow.
  * Must be reached via overflow to overwrite ctx.handler.
  *
- * Returns a 64-byte hex seed that, when hashed with the
- * challenge-specific derivation, produces the flag.
+ * Rebuilds the 42-character seed and logs it. The seed is the inner
+ * part of the flag.
  */
 static int __attribute__((used)) compute_secret(const char *data, size_t len) {
     (void)data;
     (void)len;
 
     /*
-     * The "seed" is derived from a chain of constants.
-     * Reversing this function reveals the algorithm.
-     * The correct seed value passed through derive_flag()
-     * produces: FLAG{b2d4e8f01a3c5967d82e4b0f7a19c3d568e2f4a03b}
+     * The seed is stored as big-endian 32-bit words, so it does not sit
+     * in .rodata as one readable string.
+     * Written by scripts/gen_flags.py. Do not edit by hand.
      */
+    /* gen_flags begin magic */
     static const uint32_t magic[] = {
-        0x62326434, 0x65386630, 0x31613363, 0x35393637,
-        0x64383265, 0x34623066, 0x37613139, 0x63336435,
-        0x36386532, 0x66346130, 0x33620000
+        0x38336337, 0x36363438, 0x38616265, 0x65313865,
+        0x62653935, 0x63393932, 0x36336666, 0x35333538,
+        0x65303439, 0x36626631, 0x36660000
     };
+    /* gen_flags end magic */
 
     uint8_t seed[44];
     int i;

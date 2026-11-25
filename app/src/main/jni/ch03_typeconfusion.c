@@ -2,10 +2,10 @@
  * Challenge 03: JNI Type Confusion
  * Difficulty: 3/5
  *
- * The validate() function expects a Java String but doesn't perform
- * proper JNI type checking. It uses GetStringUTFChars on whatever
- * jobject is passed. When a specially crafted byte[] is passed instead
- * of a String, the JNI call fails and triggers an alternate code path.
+ * The gate functions take loosely typed Java arguments. Gate 1 is
+ * declared for a String, but the native side accepts any jobject.
+ * When a specially crafted byte[] is passed instead of a String, the
+ * type mismatch triggers an alternate code path.
  *
  * The challenge has 4 "gates" -- each gate leaks a fragment of the key
  * when triggered with the right type confusion. Combine all 4 fragments
@@ -19,6 +19,7 @@
  */
 
 #include <jni.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <android/log.h>
@@ -32,23 +33,28 @@ static const uint8_t fragment_b[10] = {0xe1, 0xd4, 0x9f, 0x02, 0xb5, 0x68, 0x7d,
 static const uint8_t fragment_c[10] = {0x92, 0x3a, 0x7c, 0xb0, 0x18, 0xd5, 0xe9, 0x46, 0xf3, 0x01};
 static const uint8_t fragment_d[10] = {0x55, 0x8e, 0x2b, 0xc4, 0x71, 0xa9, 0x3f, 0xd0, 0x67, 0xbc};
 
-/* Master XOR key for combining fragments */
+/*
+ * Master XOR key for combining fragments.
+ * Written by scripts/gen_flags.py. Do not edit by hand.
+ */
+/* gen_flags begin master_key */
 static const uint8_t master_key[40] = {
-    0xa7, 0x3d, 0x91, 0x5c, 0xe8, 0x24, 0x6f, 0xb0,
-    0x13, 0xc9, 0x45, 0x8a, 0xde, 0x72, 0x06, 0xfb,
-    0x39, 0xc4, 0x87, 0x5e, 0xa1, 0x60, 0x1d, 0xb3,
-    0x48, 0xf7, 0x2c, 0x95, 0xe0, 0x5a, 0x0b, 0xd6,
-    0x74, 0xa8, 0x3f, 0xc1, 0x69, 0x02, 0xbe, 0x53
+    0xfe, 0xc7, 0xc4, 0xb6, 0x81, 0x35, 0x6c, 0xb6,
+    0x94, 0xa3, 0x80, 0xe2, 0xac, 0x33, 0xd6, 0x5b,
+    0x19, 0x7e, 0x95, 0xf9, 0xa7, 0x0e, 0x19, 0x87,
+    0x7d, 0xb7, 0xd0, 0x7e, 0xc2, 0x65, 0x31, 0xb8,
+    0x1f, 0xa0, 0x40, 0x98, 0x59, 0xe4, 0x55, 0x8e
 };
+/* gen_flags end master_key */
 
 /* Gate state tracker */
 static volatile int gates_unlocked = 0;
 static uint8_t collected_fragments[40];
 
 /*
- * Gate 1: Expects String, but doesn't check.
- * If called with a byte[] of length 16 where first byte is 0x42,
- * it fails the String operation and falls through to leak fragment_a.
+ * Gate 1: Declared for a String.
+ * If called with a byte[] of length 16 or more whose first byte is
+ * 0x42, the mismatch path leaks fragment_a.
  */
 JNIEXPORT jint JNICALL
 Java_com_ctf_nativectf_challenges_Ch03_gate1(JNIEnv *env, jobject obj,
@@ -56,14 +62,18 @@ Java_com_ctf_nativectf_challenges_Ch03_gate1(JNIEnv *env, jobject obj,
     (void)obj;
     const char *str;
 
-    /* Attempt to treat input as String -- will fail if it's not */
-    str = (*env)->GetStringUTFChars(env, (jstring)input, NULL);
+    if (!input) return -1;
 
-    if ((*env)->ExceptionCheck(env)) {
-        /* Type confusion detected -- check if it was intentional */
-        (*env)->ExceptionClear(env);
-
-        /* Verify the confused object is a byte[] with magic header */
+    /*
+     * The Java signature takes Object, so any type can arrive here.
+     * GetStringUTFChars on a non-String raises no Java exception:
+     * CheckJNI aborts the process and a release runtime reads the
+     * object as if it were a String. The type is therefore tested
+     * first and the mismatch is handled as the alternate path.
+     */
+    if (!(*env)->IsInstanceOf(env, input,
+            (*env)->FindClass(env, "java/lang/String"))) {
+        /* Type confusion path: a byte[] with the magic header */
         if ((*env)->IsInstanceOf(env, input,
                 (*env)->FindClass(env, "[B"))) {
             jbyteArray arr = (jbyteArray)input;
@@ -86,6 +96,9 @@ Java_com_ctf_nativectf_challenges_Ch03_gate1(JNIEnv *env, jobject obj,
     }
 
     /* Normal String path -- returns length, boring */
+    str = (*env)->GetStringUTFChars(env, (jstring)input, NULL);
+    if (!str) return -1;
+
     int len = (int)strlen(str);
     (*env)->ReleaseStringUTFChars(env, (jstring)input, str);
     return len;
@@ -153,8 +166,8 @@ Java_com_ctf_nativectf_challenges_Ch03_gate3(JNIEnv *env, jobject obj,
     if (val1 != 0xCAFE) return -1;
 
     /* Deliberate delay -- window for TOCTOU */
-    volatile int delay = 0;
-    for (int i = 0; i < 1000000; i++) { delay += i; }
+    volatile unsigned int delay = 0;   /* unsigned: the sum wraps by design */
+    for (int i = 0; i < 1000000; i++) { delay += (unsigned int)i; }
 
     /* Second read: use */
     jint val2 = (*env)->GetIntField(env, validator, fid);

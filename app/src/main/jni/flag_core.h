@@ -7,11 +7,12 @@
 /*
  * Flag verification via HMAC-SHA256.
  *
- * Flags are NEVER stored in the binary. Only the HMAC digest is stored.
- * Each challenge has a unique salt. The flag is derived from solving
- * the actual challenge -- there is no shortcut.
+ * The verifier holds no flag, only an HMAC digest per challenge.
+ * Each challenge has a unique salt. The flag has to be recovered by
+ * solving the challenge itself; the digest cannot be reversed.
  *
- * Verification: HMAC-SHA256(user_input, challenge_salt) == stored_digest
+ * Verification:
+ *   HMAC-SHA256(key = challenge_salt, message = user_input) == stored_digest
  */
 
 #define SHA256_BLOCK_SIZE  64

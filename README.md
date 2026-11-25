@@ -79,6 +79,30 @@ A custom slab allocator with 8 slots. An off-by-16 overflow allows corruption of
 
 A custom stack-based virtual machine with 32 opcodes. The bytecode is XOR-encoded. Reverse the instruction set, decode the bytecode, and solve the constraint system.
 
+## Flags
+
+Every flag has the form `FLAG{...}` with a lowercase hexadecimal body. Submit it in the app, or check it offline.
+
+```
+./scripts/verify_flag.sh ch01 "FLAG{...}"
+```
+
+The script needs bash 4 or later and openssl. It holds the same salts and HMAC-SHA256 digests as `flag_core.c`, so it accepts exactly the flags the app accepts.
+
+Challenge 06 derives its flag from the correct 16-byte input, so that flag is not stored in the library.
+
+## Maintaining the Flags
+
+One script writes the encrypted tables in the challenge sources and the digests in `flag_core.c` and `scripts/verify_flag.sh`. It reads the flags from one secret file, so a table and its digest cannot drift apart.
+
+```
+python scripts/gen_flags.py new      # create FLAGS_SECRET.txt with random flags
+python scripts/gen_flags.py apply    # rewrite the generated blocks
+python scripts/gen_flags.py check    # fail if the sources and the secrets differ
+```
+
+`FLAGS_SECRET.txt` is ignored by git and has to stay private. The blocks between the `gen_flags begin` and `gen_flags end` markers are not edited by hand.
+
 ## Build Requirements
 
 - Android Studio
@@ -103,6 +127,10 @@ app/src/main/
     ├── ch04_gauntlet.c
     ├── ch05_heapcraft.c
     └── ch06_vm.c
+
+scripts/
+├── gen_flags.py
+└── verify_flag.sh
 ```
 
 ## Author

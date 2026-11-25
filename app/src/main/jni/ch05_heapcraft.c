@@ -50,17 +50,46 @@ static int normal_read(slot_t *self, uint8_t *out, size_t max) {
 }
 
 /*
+ * The flag, XOR-masked with a rolling byte key so it does not sit in
+ * .rodata as a readable string.
+ * Written by scripts/gen_flags.py. Do not edit by hand.
+ */
+#define FLAG_MASK_SEED 0xA7
+#define FLAG_MASK_MUL  5
+#define FLAG_MASK_ADD  0x3B
+
+/* gen_flags begin masked_flag */
+static const uint8_t masked_flag[48] = {
+    0xe1, 0x32, 0xf0, 0xf7, 0xd0, 0xab, 0x24, 0xc6,
+    0x57, 0x02, 0x08, 0x6a, 0x97, 0xc8, 0x25, 0xf4,
+    0x01, 0x2c, 0xf2, 0x62, 0x59, 0x03, 0x10, 0xc4,
+    0x9e, 0x55, 0x2f, 0xcb, 0xb7, 0xf9, 0x18, 0x24,
+    0xf4, 0x2a, 0xb2, 0x33, 0xfd, 0x57, 0x56, 0x27,
+    0xea, 0x63, 0x61, 0xcf, 0x22, 0xad, 0x0d, 0x11
+};
+/* gen_flags end masked_flag */
+
+/*
  * Hidden flag generator. Address must be discovered via reversing.
  * When called as a read_handler, it writes the flag to the output buffer.
  */
 static int __attribute__((used)) flag_generator(slot_t *self, uint8_t *out, size_t max) {
     (void)self;
-    const char *flag = "FLAG{e7c3d1f9a40b28563e7d2a8c1f04b96743e8d1a2f5}";
-    size_t flag_len = strlen(flag);
+    char flag[sizeof(masked_flag) + 1];
+    size_t flag_len = sizeof(masked_flag);
     size_t copy_len = max < flag_len ? max : flag_len;
+    uint8_t key = FLAG_MASK_SEED;
+    size_t i;
+
+    for (i = 0; i < flag_len; i++) {
+        flag[i] = (char)(masked_flag[i] ^ key);
+        key = (uint8_t)(key * FLAG_MASK_MUL + FLAG_MASK_ADD);
+    }
+    flag[flag_len] = '\0';
 
     memcpy(out, flag, copy_len);
     if (max > flag_len) out[flag_len] = '\0';
+    memset(flag, 0, sizeof(flag));
 
     __android_log_print(ANDROID_LOG_INFO, TAG,
         "FLAG GENERATOR TRIGGERED VIA VTABLE HIJACK");
