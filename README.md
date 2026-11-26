@@ -13,16 +13,18 @@ Each challenge is a small C library with one job, which is to keep a flag away f
 
 ## The challenges
 
-| No | Challenge | Level | What you face | Library |
-|---|---|---|---|---|
-| 01 | String Maze | 1 of 5 | A flag under three layers of encryption | `libch01_stringmaze.so` |
-| 02 | Stack Smasher | 2 of 5 | A 64-byte stack buffer with a function pointer behind it | `libch02_stacksmasher.so` |
-| 03 | Type Confusion | 3 of 5 | Four gates that open for input they were not built for | `libch03_typeconfusion.so` |
-| 04 | Anti-Debug Gauntlet | 3 of 5 | Seven anti-analysis checks, each one a key byte | `libch04_gauntlet.so` |
-| 05 | Heap Feng Shui | 4 of 5 | A slab allocator that writes 16 bytes too far | `libch05_heapcraft.so` |
-| 06 | Virtual Machine | 5 of 5 | A custom stack machine and its encoded program | `libch06_vm.so` |
-| 07 | Ghost Export | 3 of 5 | A decoy export, a hidden registration and a key in an ELF note | `libch07_ghostexport.so` |
-| 08 | Signal Maze | 4 of 5 | A check that runs inside signal handlers | `libch08_signalmaze.so` |
+| No | Challenge | Level | What you face |
+|---|---|:---:|---|
+| 01 | String Maze | 1 | A flag under three layers of encryption |
+| 02 | Stack Smasher | 2 | A 64-byte stack buffer with a function pointer behind it |
+| 03 | Type Confusion | 3 | Four gates that open for input they were not built for |
+| 04 | Anti-Debug Gauntlet | 3 | Seven anti-analysis checks, each one a key byte |
+| 05 | Heap Feng Shui | 4 | A slab allocator that writes 16 bytes too far |
+| 06 | Virtual Machine | 5 | A custom stack machine and its encoded program |
+| 07 | Ghost Export | 3 | A decoy export, a hidden registration and a key in an ELF note |
+| 08 | Signal Maze | 4 | A check that runs inside signal handlers |
+
+Levels run from 1 to 5. Each challenge lives in its own library, named in the notes below.
 
 ## How to play
 
@@ -40,11 +42,15 @@ The sources in `app/src/main/jni` describe every challenge in their comments, do
 <details>
 <summary>01 String Maze</summary>
 
+Library `libch01_stringmaze.so`.
+
 Static analysis and layered XOR. The flag sits in the library under three layers, a rolling XOR, a byte permutation and a second XOR whose key is scattered over `.rodata`. Reverse the chain. `solve()` returns the first characters as a hint.
 </details>
 
 <details>
 <summary>02 Stack Smasher</summary>
+
+Library `libch02_stacksmasher.so`.
 
 Buffer overflow and control-flow hijack. `processInput()` copies its argument into a 64-byte stack buffer without a length check, and a function pointer sits directly behind that buffer. Overwrite the pointer so the call lands in the hidden `compute_secret()`. The seed it writes to logcat is the body of the flag.
 </details>
@@ -52,11 +58,15 @@ Buffer overflow and control-flow hijack. `processInput()` copies its argument in
 <details>
 <summary>03 Type Confusion</summary>
 
+Library `libch03_typeconfusion.so`.
+
 Loosely typed JNI arguments. Four gates guard four key fragments. Two of them open for an object of the wrong type, one for a value that changes between two reads, and one for a payload with the right checksum. `combine()` joins the fragments once all four gates are open.
 </details>
 
 <details>
 <summary>04 Anti-Debug Gauntlet</summary>
+
+Library `libch04_gauntlet.so`.
 
 Seven anti-analysis checks stand in front of the flag, and each one contributes a key byte.
 
@@ -74,11 +84,15 @@ All seven have to pass or be bypassed. The app can run them and show the result 
 <details>
 <summary>05 Heap Feng Shui</summary>
 
+Library `libch05_heapcraft.so`.
+
 Heap overflow and a function pointer. A slab allocator holds eight slots. `edit()` writes 16 bytes past the data field of a slot, far enough to reach its read handler. Redirect the handler to the hidden `flag_generator()`.
 </details>
 
 <details>
 <summary>06 Virtual Machine</summary>
+
+Library `libch06_vm.so`.
 
 A stack-based virtual machine with 32 instructions runs a program that is XOR-encoded in the binary. The program takes 16 bytes, transforms them and compares the result with constants. Recover the instruction set, decode and disassemble the program, then solve the constraints. Exactly one input passes, and the flag is derived from it, so the library does not store the flag.
 </details>
@@ -86,11 +100,15 @@ A stack-based virtual machine with 32 instructions runs a program that is XOR-en
 <details>
 <summary>07 Ghost Export</summary>
 
+Library `libch07_ghostexport.so`.
+
 The library exports a function with the JNI name of `reveal()`. That export is a decoy and answers with a flag the verifier rejects. The function Java reaches is bound in `JNI_OnLoad` through `RegisterNatives`. A constructor in `.init_array` runs first, finds a custom ELF note in the library's own program headers and takes a key from it. Find the hidden function, read the key with `readelf -n`, and invert the passphrase check.
 </details>
 
 <details>
 <summary>08 Signal Maze</summary>
+
+Library `libch08_signalmaze.so`.
 
 `walk()` takes a 16-character code and raises `SIGTRAP` once per character. The work happens in three signal handlers. Each one mixes the current byte into a 64-bit state, compares part of it with a checkpoint and installs the handler for the next step, so the order of the handlers depends on the code. Find the handlers through `sigaction`, rebuild the walk offline and recover the code one character at a time. A debugger that swallows the signal ends the walk.
 </details>
