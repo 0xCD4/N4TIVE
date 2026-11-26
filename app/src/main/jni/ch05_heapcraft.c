@@ -72,8 +72,12 @@ static const uint8_t masked_flag[48] = {
 /*
  * Hidden flag generator. Address must be discovered via reversing.
  * When called as a read_handler, it writes the flag to the output buffer.
+ *
+ * Nothing refers to this function. "used" keeps it through the compiler and
+ * "retain" keeps it through the linker, which drops unreferenced sections in
+ * release builds.
  */
-static int __attribute__((used)) flag_generator(slot_t *self, uint8_t *out, size_t max) {
+static int __attribute__((used, retain)) flag_generator(slot_t *self, uint8_t *out, size_t max) {
     (void)self;
     char flag[sizeof(masked_flag) + 1];
     size_t flag_len = sizeof(masked_flag);
