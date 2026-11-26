@@ -14,7 +14,7 @@ target_link_libraries(ch01_stringmaze flag_core log)
 
 # -- Challenge 02: Stack Smasher --
 add_library(ch02_stacksmasher SHARED ch02_stacksmasher.c)
-target_compile_options(ch02_stacksmasher PRIVATE -fno-stack-protector -z execstack)
+target_compile_options(ch02_stacksmasher PRIVATE -fno-stack-protector)
 target_link_libraries(ch02_stacksmasher flag_core log)
 
 # -- Challenge 03: JNI Type Confusion --
