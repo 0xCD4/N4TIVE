@@ -28,7 +28,7 @@ Levels run from 1 to 5. Each challenge lives in its own library, named in the no
 
 ## How to play
 
-1. Build the app and install it on a device or an emulator.
+1. Install the app on a device or an emulator, from the prebuilt APK or from source.
 2. Take the libraries out of the APK and open them in Ghidra or IDA.
 3. Recover a flag. Every flag has the form `FLAG{...}` with a lowercase hexadecimal body.
 4. Submit it in the app, or check it offline with the script below.
@@ -113,11 +113,21 @@ Library `libch08_signalmaze.so`.
 `walk()` takes a 16-character code and raises `SIGTRAP` once per character. The work happens in three signal handlers. Each one mixes the current byte into a 64-bit state, compares part of it with a checkpoint and installs the handler for the next step, so the order of the handlers depends on the code. Find the handlers through `sigaction`, rebuild the walk offline and recover the code one character at a time. A debugger that swallows the signal ends the walk.
 </details>
 
-## Build and install
+## Install
 
-There is no prebuilt APK. The app is built from source.
+A prebuilt APK is on the [releases page](https://github.com/0xCD4/N4TIVE/releases/latest). Download it and install it with adb, or copy it to the device and open it there.
 
-You need JDK 17 or newer and the Android SDK with platform 34, the NDK and CMake 3.22.1. The last two install from the SDK Manager in Android Studio. The Gradle wrapper fetches Gradle 8.5 by itself.
+```
+adb install n4tive-2.0-debug.apk
+```
+
+The APK is the debug build. Its libraries are compiled with `-O0 -g` for arm64-v8a, armeabi-v7a, x86_64 and x86, and it is signed with an Android debug key. Remove it before you install a build of your own, because Android refuses an update signed with a different key. The release notes give the SHA-256 of the file.
+
+The app runs on Android 8.0 and newer, on a device or an emulator.
+
+### Build from source
+
+You need JDK 17 or newer and the Android SDK with platform 34, NDK 27.2.12479018 and CMake 3.22.1. The last two install from the SDK Manager in Android Studio. The Gradle wrapper fetches Gradle 8.5 by itself.
 
 ```
 git clone https://github.com/0xCD4/N4TIVE.git
@@ -126,7 +136,7 @@ cd N4TIVE
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The app runs on Android 8.0 and newer, on a device or an emulator. A debug build compiles the libraries with `-O0 -g`, a release build with `-O2`. The release build is the harder one to read.
+A debug build compiles the libraries with `-O0 -g`, a release build with `-O2`. The release build is the harder one to read.
 
 ## Check a flag offline
 
