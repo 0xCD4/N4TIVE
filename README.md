@@ -150,9 +150,9 @@ The script needs bash 4 or later and openssl. It holds the same salts and HMAC-S
 
 Every challenge was solved through its intended path with the real C code on a Linux host, also under AddressSanitizer and UndefinedBehaviorSanitizer. The eight libraries compile without warnings for arm64-v8a, armeabi-v7a, x86_64 and x86, as debug and as release builds.
 
-The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above.
+The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above. The APK on the releases page went through the same run on that emulator.
 
-It has not been tested on ARM hardware, and the release build has not been run on a device.
+It has not been tested on ARM hardware, and the release build has not been run on a device. The libraries are linked for 4 KB memory pages, and a device that runs with 16 KB pages has not been tried.
 
 ## Maintaining the flags
 
