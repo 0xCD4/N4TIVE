@@ -115,13 +115,20 @@ Library `libch08_signalmaze.so`.
 
 ## Install
 
-A prebuilt APK is on the [releases page](https://github.com/0xCD4/N4TIVE/releases/latest). Download it and install it with adb, or copy it to the device and open it there.
+Two prebuilt APKs are on the [releases page](https://github.com/0xCD4/N4TIVE/releases/latest). They hold the same eight challenges with the same flags and differ in how hard the libraries are to read.
+
+| File | Libraries | Debuggable |
+|---|---|:---:|
+| `n4tive-2.1-debug.apk` | `-O0 -g`, symbols kept | yes |
+| `n4tive-2.1-release.apk` | `-O2`, symbols stripped | no |
+
+Start with the debug file if native reversing is new to you. Download one and install it with adb, or copy it to the device and open it there.
 
 ```
-adb install n4tive-2.0-debug.apk
+adb install n4tive-2.1-debug.apk
 ```
 
-The APK is the debug build. Its libraries are compiled with `-O0 -g` for arm64-v8a, armeabi-v7a, x86_64 and x86, and it is signed with an Android debug key. Remove it before you install a build of your own, because Android refuses an update signed with a different key. The release notes give the SHA-256 of the file.
+Both files hold libraries for arm64-v8a, armeabi-v7a, x86_64 and x86 and are signed with the same Android debug key, so one installs over the other. Remove the app before you install a build of your own, because Android refuses an update signed with a different key. The release notes give the SHA-256 of each file.
 
 The app runs on Android 8.0 and newer, on a device or an emulator.
 
@@ -136,7 +143,7 @@ cd N4TIVE
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-A debug build compiles the libraries with `-O0 -g`, a release build with `-O2`. The release build is the harder one to read.
+`./gradlew assembleRelease` builds the stripped variant into `app/build/outputs/apk/release/app-release.apk`. It is signed with the debug key of your machine, because the repository holds no release key.
 
 ## Check a flag offline
 
@@ -150,9 +157,9 @@ The script needs bash 4 or later and openssl. It holds the same salts and HMAC-S
 
 Every challenge was solved through its intended path with the real C code on a Linux host, also under AddressSanitizer and UndefinedBehaviorSanitizer. The eight libraries compile without warnings for arm64-v8a, armeabi-v7a, x86_64 and x86, as debug and as release builds.
 
-The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above. The APK on the releases page went through the same run on that emulator.
+The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above. Both APKs on the releases page went through that run, the debug file and the stripped release file.
 
-It has not been tested on ARM hardware, and the release build has not been run on a device. The libraries are linked for 4 KB memory pages, and a device that runs with 16 KB pages has not been tried.
+It has not been tested on ARM hardware. The libraries are linked for 4 KB memory pages, and a device that runs with 16 KB pages has not been tried.
 
 ## Maintaining the flags
 
