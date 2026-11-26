@@ -1,25 +1,105 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
+    <img src="docs/banner-light.png" width="100%" alt="N4TIVE on an Android phone. The home screen lists eight challenges, the second screen shows the Ghost Export challenge, the third shows the seven checks of the Anti-Debug Gauntlet with one of them failing.">
+  </picture>
+</p>
+
 # N4TIVE
 
-Android Native Reverse Engineering CTF
+Eight reverse engineering challenges inside the native libraries of an Android app.
 
-## Overview
+Each challenge is a small C library with one job, which is to keep a flag away from you. You get the flag by working out what the compiled code does, with a disassembler, with Frida, or with both. The app checks the flag you submit and remembers which challenges you have solved.
 
-N4TIVE is an eight-challenge Capture The Flag application focused on Android native library analysis. All challenges require reversing `.so` files compiled from C.
+## The challenges
 
-## Requirements
+| No | Challenge | Level | What you face | Library |
+|---|---|---|---|---|
+| 01 | String Maze | 1 of 5 | A flag under three layers of encryption | `libch01_stringmaze.so` |
+| 02 | Stack Smasher | 2 of 5 | A 64-byte stack buffer with a function pointer behind it | `libch02_stacksmasher.so` |
+| 03 | Type Confusion | 3 of 5 | Four gates that open for input they were not built for | `libch03_typeconfusion.so` |
+| 04 | Anti-Debug Gauntlet | 3 of 5 | Seven anti-analysis checks, each one a key byte | `libch04_gauntlet.so` |
+| 05 | Heap Feng Shui | 4 of 5 | A slab allocator that writes 16 bytes too far | `libch05_heapcraft.so` |
+| 06 | Virtual Machine | 5 of 5 | A custom stack machine and its encoded program | `libch06_vm.so` |
+| 07 | Ghost Export | 3 of 5 | A decoy export, a hidden registration and a key in an ELF note | `libch07_ghostexport.so` |
+| 08 | Signal Maze | 4 of 5 | A check that runs inside signal handlers | `libch08_signalmaze.so` |
 
-- Android device or emulator (API 26+)
-- Ghidra, IDA Pro, or similar disassembler
-- Frida (recommended for dynamic analysis)
-- Basic understanding of ARM assembly and JNI
+## How to play
 
-## Installation
+1. Build the app and install it on a device or an emulator.
+2. Take the libraries out of the APK and open them in Ghidra or IDA.
+3. Recover a flag. Every flag has the form `FLAG{...}` with a lowercase hexadecimal body.
+4. Submit it in the app, or check it offline with the script below.
 
-```
-adb install n4tive.apk
-```
+You will want a disassembler, Frida for the challenges that need a hook or a crafted call, and some familiarity with ARM or x86 assembly and with JNI.
 
-Build from source:
+The sources in `app/src/main/jni` describe every challenge in their comments, down to the way it is solved. Read them afterwards if you want the challenge to stay one.
+
+## Notes on each challenge
+
+<details>
+<summary>01 String Maze</summary>
+
+Static analysis and layered XOR. The flag sits in the library under three layers, a rolling XOR, a byte permutation and a second XOR whose key is scattered over `.rodata`. Reverse the chain. `solve()` returns the first characters as a hint.
+</details>
+
+<details>
+<summary>02 Stack Smasher</summary>
+
+Buffer overflow and control-flow hijack. `processInput()` copies its argument into a 64-byte stack buffer without a length check, and a function pointer sits directly behind that buffer. Overwrite the pointer so the call lands in the hidden `compute_secret()`. The seed it writes to logcat is the body of the flag.
+</details>
+
+<details>
+<summary>03 Type Confusion</summary>
+
+Loosely typed JNI arguments. Four gates guard four key fragments. Two of them open for an object of the wrong type, one for a value that changes between two reads, and one for a payload with the right checksum. `combine()` joins the fragments once all four gates are open.
+</details>
+
+<details>
+<summary>04 Anti-Debug Gauntlet</summary>
+
+Seven anti-analysis checks stand in front of the flag, and each one contributes a key byte.
+
+1. TracerPid in `/proc/self/status`
+2. Frida in the memory maps
+3. A ptrace self-attach
+4. Timing
+5. A scan for breakpoint instructions
+6. The Java debugger
+7. The APK signature
+
+All seven have to pass or be bypassed. The app can run them and show the result of each. On the Android 15 emulator used for testing, the ptrace check fails by itself, because SELinux denies the self-attach. There that one has to be bypassed.
+</details>
+
+<details>
+<summary>05 Heap Feng Shui</summary>
+
+Heap overflow and a function pointer. A slab allocator holds eight slots. `edit()` writes 16 bytes past the data field of a slot, far enough to reach its read handler. Redirect the handler to the hidden `flag_generator()`.
+</details>
+
+<details>
+<summary>06 Virtual Machine</summary>
+
+A stack-based virtual machine with 32 instructions runs a program that is XOR-encoded in the binary. The program takes 16 bytes, transforms them and compares the result with constants. Recover the instruction set, decode and disassemble the program, then solve the constraints. Exactly one input passes, and the flag is derived from it, so the library does not store the flag.
+</details>
+
+<details>
+<summary>07 Ghost Export</summary>
+
+The library exports a function with the JNI name of `reveal()`. That export is a decoy and answers with a flag the verifier rejects. The function Java reaches is bound in `JNI_OnLoad` through `RegisterNatives`. A constructor in `.init_array` runs first, finds a custom ELF note in the library's own program headers and takes a key from it. Find the hidden function, read the key with `readelf -n`, and invert the passphrase check.
+</details>
+
+<details>
+<summary>08 Signal Maze</summary>
+
+`walk()` takes a 16-character code and raises `SIGTRAP` once per character. The work happens in three signal handlers. Each one mixes the current byte into a 64-bit state, compares part of it with a checkpoint and installs the handler for the next step, so the order of the handlers depends on the code. Find the handlers through `sigaction`, rebuild the walk offline and recover the code one character at a time. A debugger that swallows the signal ends the walk.
+</details>
+
+## Build and install
+
+There is no prebuilt APK. The app is built from source.
+
+You need JDK 17 or newer and the Android SDK with platform 34, the NDK and CMake 3.22.1. The last two install from the SDK Manager in Android Studio. The Gradle wrapper fetches Gradle 8.5 by itself.
 
 ```
 git clone https://github.com/0xCD4/N4TIVE.git
@@ -28,84 +108,25 @@ cd N4TIVE
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Challenges
+The app runs on Android 8.0 and newer, on a device or an emulator. A debug build compiles the libraries with `-O0 -g`, a release build with `-O2`. The release build is the harder one to read.
 
-### Challenge 01: String Maze
-**Difficulty:** 1/5  
-**Library:** libch01_stringmaze.so  
-**Technique:** Static analysis, XOR decryption
-
-The target string is encrypted with three layers of obfuscation. Trace the decryption chain in .rodata.
-
-### Challenge 02: Stack Smasher
-**Difficulty:** 2/5  
-**Library:** libch02_stacksmasher.so  
-**Technique:** Buffer overflow, control flow hijacking
-
-A 64-byte stack buffer with no bounds checking. Overflow it to redirect execution to a hidden function.
-
-### Challenge 03: Type Confusion
-**Difficulty:** 3/5  
-**Library:** libch03_typeconfusion.so  
-**Technique:** JNI type mismatch exploitation
-
-Four gates protect the target. Each gate expects a specific Java type but can be bypassed by passing incorrect types, triggering alternate code paths.
-
-### Challenge 04: Anti-Debug Gauntlet
-**Difficulty:** 3/5  
-**Library:** libch04_gauntlet.so  
-**Technique:** Anti-analysis bypass
-
-Seven anti-debugging checks must pass or be bypassed:
-1. TracerPid detection
-2. Frida port/maps scanning
-3. ptrace self-attach
-4. Timing analysis
-5. Software breakpoint detection
-6. Java debugger check
-7. APK signature verification
-
-### Challenge 05: Heap Feng Shui
-**Difficulty:** 4/5  
-**Library:** libch05_heapcraft.so  
-**Technique:** Heap exploitation, Use-After-Free
-
-A custom slab allocator with 8 slots. An off-by-16 overflow allows corruption of adjacent slot metadata. Combined with a UAF vulnerability, hijack a function pointer.
-
-### Challenge 06: Virtual Machine
-**Difficulty:** 5/5  
-**Library:** libch06_vm.so  
-**Technique:** Custom VM reversing, constraint solving
-
-A custom stack-based virtual machine with 32 opcodes. The bytecode is XOR-encoded. Reverse the instruction set, decode the bytecode, and solve the constraint system.
-
-### Challenge 07: Ghost Export
-**Difficulty:** 3/5  
-**Library:** libch07_ghostexport.so  
-**Technique:** Decoy export, RegisterNatives, ELF notes
-
-The library exports a function with the JNI name of `reveal()`. That export is a decoy and answers with a flag the verifier rejects. The function Java reaches is bound in `JNI_OnLoad` through `RegisterNatives`. A constructor in `.init_array` runs first, finds a custom ELF note in the library's own program headers and takes a key from it. Find the hidden function, read the key with `readelf -n`, and invert the passphrase check.
-
-### Challenge 08: Signal Maze
-**Difficulty:** 4/5  
-**Library:** libch08_signalmaze.so  
-**Technique:** Control flow hidden in signal handlers
-
-`walk()` takes a 16-character code and raises `SIGTRAP` once per character. The work happens in three signal handlers. Each one mixes the current byte into a 64-bit state, compares part of it with a checkpoint and installs the handler for the next step, so the order of the handlers depends on the code. Find the handlers through `sigaction`, rebuild the walk offline and recover the code one character at a time. A debugger that swallows the signal ends the walk.
-
-## Flags
-
-Every flag has the form `FLAG{...}` with a lowercase hexadecimal body. Submit it in the app, or check it offline.
+## Check a flag offline
 
 ```
 ./scripts/verify_flag.sh ch01 "FLAG{...}"
 ```
 
-The script needs bash 4 or later and openssl. It holds the same salts and HMAC-SHA256 digests as `flag_core.c`, so it accepts exactly the flags the app accepts.
+The script needs bash 4 or later and openssl. It holds the same salts and HMAC-SHA256 digests as `flag_core.c`, so it accepts exactly the flags the app accepts. The digests cannot be turned back into flags.
 
-Challenge 06 derives its flag from the correct 16-byte input, so that flag is not stored in the library. Challenges 07 and 08 decrypt their flag with a key derived from the right passphrase or code.
+## What was tested
 
-## Maintaining the Flags
+Every challenge was solved through its intended path with the real C code on a Linux host, also under AddressSanitizer and UndefinedBehaviorSanitizer. The eight libraries compile without warnings for arm64-v8a, armeabi-v7a, x86_64 and x86, as debug and as release builds.
+
+The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above.
+
+It has not been tested on ARM hardware, and the release build has not been run on a device.
+
+## Maintaining the flags
 
 One script writes the encrypted tables in the challenge sources and the digests in `flag_core.c` and `scripts/verify_flag.sh`. It reads the flags from one secret file, so a table and its digest cannot drift apart.
 
@@ -118,46 +139,25 @@ python scripts/gen_flags.py check    # fail if the sources and the secrets diffe
 
 `FLAGS_SECRET.txt` is ignored by git and has to stay private. The blocks between the `gen_flags begin` and `gen_flags end` markers are not edited by hand.
 
-## Build Requirements
-
-- Android Studio
-- NDK (via SDK Manager)
-- CMake 3.22.1+ (via SDK Manager)
-
-## Project Structure
+## Project layout
 
 ```
 app/src/main/
-├── assets/fonts/
-│   ├── newsreader.ttf
-│   └── schibsted_grotesk.ttf
+├── assets/fonts/        Newsreader and Schibsted Grotesk
 ├── java/com/ctf/nativectf/
-│   ├── MainActivity.java
-│   ├── ChallengeActivity.java
-│   ├── Challenges.java
-│   ├── Progress.java
-│   ├── Ui.java
-│   └── challenges/
-│       └── Ch01.java - Ch08.java
+│   ├── MainActivity.java       the list of challenges
+│   ├── ChallengeActivity.java  one challenge and its flag field
+│   ├── Challenges.java         titles, levels and descriptions
+│   ├── Progress.java           which challenges are solved
+│   ├── Ui.java                 palette, typefaces, buttons
+│   └── challenges/             Ch01.java to Ch08.java, the JNI declarations
 └── jni/
-    ├── CMakeLists.txt
-    ├── flag_core.c
-    ├── ch01_stringmaze.c
-    ├── ch02_stacksmasher.c
-    ├── ch03_typeconfusion.c
-    ├── ch04_gauntlet.c
-    ├── ch05_heapcraft.c
-    ├── ch06_vm.c
-    ├── ch07_ghostexport.c
-    └── ch08_signalmaze.c
+    ├── flag_core.c             SHA-256, HMAC and flag verification
+    └── ch01_stringmaze.c to ch08_signalmaze.c
 
-licenses/
-├── OFL-Newsreader.txt
-└── OFL-SchibstedGrotesk.txt
-
-scripts/
-├── gen_flags.py
-└── verify_flag.sh
+docs/        the images of this page
+licenses/    licence texts of the bundled typefaces
+scripts/     gen_flags.py and verify_flag.sh
 ```
 
 ## Typefaces
@@ -174,4 +174,4 @@ Two parts come from others and keep their own terms. The bundled typefaces are u
 
 ## Author
 
-Ahmet Goker
+Ahmet Göker, [CSINT Research](https://csintresearch.org)
