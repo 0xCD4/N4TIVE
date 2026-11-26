@@ -39,11 +39,14 @@ android {
             }
         }
         release {
-            // Level 1: stripped, no debug
+            // Level 1: -O2, hidden visibility, symbols stripped, not debuggable
             debuggable false
             jniDebuggable false
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // The repository holds no release key. The debug key makes
+            // assembleRelease produce an APK that installs.
+            signingConfig signingConfigs.debug
             externalNativeBuild {
                 cmake {
                     cFlags "-O2 -DNDEBUG -fvisibility=hidden"
@@ -64,10 +67,13 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    packagingOptions {
-        jniLibs {
-            keepDebugSymbols += ['**/*.so']
-        }
+}
+
+androidComponents {
+    // Only the debug build keeps the symbols of its libraries.
+    // The release build is stripped when it is packaged.
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.packaging.jniLibs.keepDebugSymbols.add("**/*.so")
     }
 }
 
