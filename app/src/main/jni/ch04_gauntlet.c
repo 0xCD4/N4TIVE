@@ -7,7 +7,7 @@
  *   2. Frida detection (/proc/self/maps scan for frida)
  *   3. ptrace self-attach
  *   4. Timing check (execution time threshold)
- *   5. Breakpoint detection (scan for 0xD4 BRK instruction on ARM64)
+ *   5. Breakpoint detection (scan for the BRK instruction, ARM64 only)
  *   6. Java debugger check (android.os.Debug.isDebuggerConnected)
  *   7. APK signature verification
  *
@@ -132,6 +132,7 @@ static uint8_t __attribute__((noinline)) check_timing(void) {
 
 /* --- Check 5: Breakpoint detection (ARM64 BRK scan) --- */
 static uint8_t __attribute__((noinline)) check_breakpoints(void) {
+#if defined(__aarch64__)
     /*
      * Scan our own .text for BRK (0xD4200000) or software breakpoint
      * patterns. A debugger inserts these.
@@ -151,6 +152,16 @@ static uint8_t __attribute__((noinline)) check_breakpoints(void) {
     }
 
     return (suspicious > 2) ? 0x00 : expected_bytes[4];
+#else
+    /*
+     * BRK is an ARM64 instruction. Code of another architecture holds the
+     * same bit pattern by chance (the 32-bit ARM release build had four
+     * such words), so there is nothing to scan for here. The volatile
+     * read keeps this a real call, so every build has seven checks.
+     */
+    volatile uint8_t byte = expected_bytes[4];
+    return byte;
+#endif
 }
 
 /* --- Check 6: Java debugger check --- */
