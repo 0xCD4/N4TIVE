@@ -60,7 +60,7 @@ Buffer overflow and control-flow hijack. `processInput()` copies its argument in
 
 Library `libch03_typeconfusion.so`.
 
-Loosely typed JNI arguments. Four gates guard four key fragments. Two of them open for an object of the wrong type, one for a value that changes between two reads, and one for a payload with the right checksum. `combine()` joins the fragments once all four gates are open.
+Loosely typed JNI arguments. Four gates guard four key fragments. Two of them open for an object of the wrong type, one for a value that changes between two reads, and one for a payload with the right checksum. The gate with the two reads sleeps for a quarter of a second between them, so the change has to come from a second thread or from a hook on the sleep. `combine()` joins the fragments once all four gates are open.
 </details>
 
 <details>
@@ -78,7 +78,7 @@ Seven anti-analysis checks stand in front of the flag, and each one contributes 
 6. The Java debugger
 7. The APK signature
 
-All seven have to pass or be bypassed. The app can run them and show the result of each. On the Android 15 emulator used for testing, the ptrace check fails by itself, because SELinux denies the self-attach. There that one has to be bypassed.
+All seven have to pass or be bypassed. The app can run them and show the result of each. On the Android 14 and Android 15 emulators used for testing, the ptrace check fails by itself, because SELinux denies the self-attach. There that one has to be bypassed. The breakpoint scan looks for an ARM64 instruction, so it only scans in the arm64-v8a library.
 </details>
 
 <details>
@@ -119,13 +119,13 @@ Two prebuilt APKs are on the [releases page](https://github.com/0xCD4/N4TIVE/rel
 
 | File | Libraries | Debuggable |
 |---|---|:---:|
-| `n4tive-2.1-debug.apk` | `-O0 -g`, symbols kept | yes |
-| `n4tive-2.1-release.apk` | `-O2`, symbols stripped | no |
+| `n4tive-2.2-debug.apk` | `-O0 -g`, symbols kept | yes |
+| `n4tive-2.2-release.apk` | `-O2`, symbols stripped | no |
 
 Start with the debug file if native reversing is new to you. Download one and install it with adb, or copy it to the device and open it there.
 
 ```
-adb install n4tive-2.1-debug.apk
+adb install n4tive-2.2-debug.apk
 ```
 
 Both files hold libraries for arm64-v8a, armeabi-v7a, x86_64 and x86 and are signed with the same Android debug key, so one installs over the other. Remove the app before you install a build of your own, because Android refuses an update signed with a different key. The release notes give the SHA-256 of each file.
@@ -157,9 +157,9 @@ The script needs bash 4 or later and openssl. It holds the same salts and HMAC-S
 
 Every challenge was solved through its intended path with the real C code on a Linux host, also under AddressSanitizer and UndefinedBehaviorSanitizer. The eight libraries compile without warnings for arm64-v8a, armeabi-v7a, x86_64 and x86, as debug and as release builds.
 
-The app was then run on an Android 15 x86_64 emulator. Seven challenges were solved inside the app process there. Challenge 04 needs its ptrace check bypassed on that Android version, as described above. Both APKs on the releases page went through that run, the debug file and the stripped release file.
+Both APKs on the releases page were then run on two x86_64 emulators, Android 15 and Android 14. On the Android 14 emulator they also ran with their arm64-v8a libraries, which that system image translates to x86_64. In each of these six runs seven challenges were solved inside the app process. Challenge 04 passed six of its seven checks and needs its ptrace check bypassed, as described above.
 
-It has not been tested on ARM hardware. The libraries are linked for 4 KB memory pages, and a device that runs with 16 KB pages has not been tried.
+It has not been tested on ARM hardware, and translated ARM64 code says nothing about the timing of a real ARM CPU. The armeabi-v7a and x86 libraries were built and not run. The 64-bit libraries are linked for 16 KB memory pages and both APKs pass the 16 KB check of `zipalign`. A device that runs with 16 KB pages has not been tried.
 
 ## Maintaining the flags
 
