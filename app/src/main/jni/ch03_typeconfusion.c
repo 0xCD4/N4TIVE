@@ -19,13 +19,18 @@
  */
 
 #include <jni.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <android/log.h>
 #include "flag_core.h"
 
 #define TAG "ch03"
+
+/* How long gate 3 waits between its two reads of the token. */
+#define GATE3_WINDOW_MS 250
 
 /* Key fragments -- leaked by type confusion on each gate */
 static const uint8_t fragment_a[10] = {0xc9, 0xa1, 0xf3, 0xd7, 0xe2, 0x04, 0x5b, 0x86, 0xa3, 0xc7};
@@ -123,9 +128,10 @@ Java_com_ctf_nativectf_challenges_Ch03_gate2(JNIEnv *env, jobject obj,
             (*env)->GetFloatArrayRegion(env, farr, 0, 4, vals);
 
             /* Check for magic float pattern: NaN with specific payload */
-            uint32_t *raw = (uint32_t *)vals;
-            if ((raw[0] & 0x7FC00000) == 0x7FC00000 &&
-                (raw[0] & 0xFFFF) == 0x1337) {
+            uint32_t raw;
+            memcpy(&raw, &vals[0], sizeof(raw));
+            if ((raw & 0x7FC00000) == 0x7FC00000 &&
+                (raw & 0xFFFF) == 0x1337) {
                 memcpy(collected_fragments + 10, fragment_b, 10);
                 gates_unlocked |= 2;
                 __android_log_print(ANDROID_LOG_INFO, TAG,
@@ -148,9 +154,29 @@ Java_com_ctf_nativectf_challenges_Ch03_gate2(JNIEnv *env, jobject obj,
 }
 
 /*
+ * The window of gate 3. It is a length of time, so it is the same on a
+ * fast and on a slow CPU. The deadline is absolute, so a signal that
+ * cuts the sleep short does not shorten the window.
+ */
+static void hold_window(void) {
+    struct timespec until;
+
+    clock_gettime(CLOCK_MONOTONIC, &until);
+    until.tv_nsec += GATE3_WINDOW_MS * 1000000L;
+    if (until.tv_nsec >= 1000000000L) {
+        until.tv_sec += 1;
+        until.tv_nsec -= 1000000000L;
+    }
+    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &until, NULL) == EINTR) { }
+}
+
+/*
  * Gate 3: Time-of-check-time-of-use on object field.
- * The native code reads a field, validates it, then reads it again.
- * If you modify the field between reads (via another thread), gate opens.
+ * The native code reads a field, validates it, sleeps for
+ * GATE3_WINDOW_MS and reads the field again. If the field changes in
+ * between, the gate opens. The calling thread is asleep inside this
+ * function, so the write has to come from another thread, or from a
+ * hook on the sleep.
  */
 JNIEXPORT jint JNICALL
 Java_com_ctf_nativectf_challenges_Ch03_gate3(JNIEnv *env, jobject obj,
@@ -166,8 +192,7 @@ Java_com_ctf_nativectf_challenges_Ch03_gate3(JNIEnv *env, jobject obj,
     if (val1 != 0xCAFE) return -1;
 
     /* Deliberate delay -- window for TOCTOU */
-    volatile unsigned int delay = 0;   /* unsigned: the sum wraps by design */
-    for (int i = 0; i < 1000000; i++) { delay += (unsigned int)i; }
+    hold_window();
 
     /* Second read: use */
     jint val2 = (*env)->GetIntField(env, validator, fid);
